@@ -5,6 +5,43 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NoirMog</title>
+    <script>
+      // Hidden tabs never run the rendering pipeline: requestAnimationFrame and
+      // ResizeObserver callbacks simply don't fire. That would leave the 3D
+      // viewport permanently blank/frozen (e.g. headless previews, background
+      // tabs). Fall back to (throttled) timers while hidden so the app still
+      // initializes and limps along; native behavior is used whenever visible.
+      ;(() => {
+        const nativeRaf = window.requestAnimationFrame.bind(window)
+        window.requestAnimationFrame = (cb) =>
+          document.visibilityState === 'hidden'
+            ? setTimeout(() => cb(performance.now()), 100)
+            : nativeRaf(cb)
+
+        const NativeRO = window.ResizeObserver
+        if (!NativeRO) return
+        window.ResizeObserver = class extends NativeRO {
+          constructor(cb) {
+            super(cb)
+            this._cb = cb
+          }
+          observe(el, opts) {
+            super.observe(el, opts)
+            if (document.visibilityState !== 'hidden') return
+            // Native callbacks are tied to rendering; deliver the initial size
+            // by timer so layout-dependent code can proceed while hidden.
+            setTimeout(() => {
+              if (document.visibilityState !== 'hidden') return
+              const r = el.getBoundingClientRect()
+              this._cb(
+                [{ target: el, contentRect: r, borderBoxSize: [], contentBoxSize: [], devicePixelContentBoxSize: [] }],
+                this,
+              )
+            }, 50)
+          }
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -21,11 +21,22 @@ for the full spec.
       lines, error card with failing stage + hint, status-bar live summary)
 
 ### Phase 1 — Core Visual Proof (tracked, stabilized, talking bust)
-- [ ] Generic head mesh with clean face UV region loaded in viewport
-- [ ] Upload video → per-frame MediaPipe Face Landmarker with frame-count progress
-- [ ] Stabilize via facial transformation matrix (counter-transform = software head-mount)
-- [ ] Warp stabilized face into head UV layout → stabilized UV face texture video
-- [ ] Head rotation + jaw-open channels driving mesh during playback, synced with audio
+- [x] Generic head mesh with clean face UV region loaded in viewport (user-authored
+      `Low Poly Face - Subdiv 1.glb` → `public/models/head.glb`; base version kept as
+      `head-base.glb`)
+- [x] Upload video → per-frame MediaPipe Face Landmarker with frame-count progress
+- [x] Stabilize + warp in one pass: each landmark has a FIXED destination in the head's UV
+      square (computed once by raycasting the aligned canonical face onto the head mesh and
+      reading authored UVs); per-frame the video is warped by landmark triangles to those
+      fixed destinations on the GPU. Fixed destinations = head motion cancels by construction.
+- [x] Head rotation (yaw/pitch/roll from the facial transformation matrix, relative to first
+      tracked frame) + jawOpen (blendshape → procedural morph target) via the channel system
+- [x] Playback synced with audio (the source video element drives texture, channels and sound)
+- [x] Verified in-browser with both test clips: face stays locked to the mesh across
+      expressions and head turns; mesh follows head pose; skin-tone background auto-sampled
+- Deferred within Phase 1: the "stabilized UV texture video" exists as a live render target;
+  it is materialized as an actual encoded video only at export (Phase 4) — avoids holding
+  huge frame sequences in memory
 
 ### Phase 2 — Capture Pipeline & Robustness
 - [ ] Step 2 UX: file upload + bare getUserMedia recorder
@@ -61,6 +72,33 @@ for the full spec.
 - 2026-08-10: Observed during verification: browsers freeze/throttle timers in backgrounded
   tabs, which stalls setTimeout-driven work. Reinforces the Phase 2 plan to run heavy
   processing in a worker (workers are not frozen with the tab).
+- 2026-08-10: Hidden tabs never run the rendering pipeline (no rAF, no ResizeObserver
+  callbacks), which left the R3F canvas permanently uninitialized in headless previews.
+  index.html installs timer fallbacks for both, active only while `visibilityState ===
+  'hidden'`.
+- 2026-08-10: Landmark→UV mapping is raycast-based, not an affine fit: the authored unwrap
+  spreads the face to fill the UV square (avg affine residual was 15% of UV space, so a
+  global affine was wrong). Raycasting the aligned canonical face onto the mesh and
+  interpolating authored UVs is exact for any unwrap.
+- 2026-08-10: Canonical↔head alignment is anchor-based (nose tip = frontmost vertex,
+  chin = lowest near-center front vertex; scale/translate fit). Good enough for the generic
+  head; Phase 3 fitting will supersede it.
+- 2026-08-10: MediaPipe VIDEO-mode timestamps must increase monotonically for the lifetime
+  of a landmarker instance; a module-level clock in faceTracker.ts guarantees this across
+  tracking runs, and a graph error disposes the cached instance (they never recover).
+- 2026-08-10: Warp mesh renders double-sided: the UV layout's v orientation mirrors the
+  warp geometry, which would otherwise backface-cull every triangle.
+- 2026-08-10: VideoTexture uploads are forced every warp render (needsUpdate) — the default
+  requestVideoFrameCallback path misses paused/seeked frames, breaking scrubbing.
+
+## Assets & Sources
+- Base head mesh: user-authored low-poly head ("Noirmog Head UV Ref/", CC: project-own).
+  Face UV region fills the square; back-of-head islands in corners.
+- MediaPipe Face Landmarker model + wasm vendored into `public/mediapipe/` (Apache-2.0,
+  from @mediapipe/tasks-vision npm package and storage.googleapis.com model bucket).
+- Canonical face model (468 verts, metric) baked from google-ai-edge/mediapipe
+  `canonical_face_model.obj` (Apache-2.0) via `tools/bake-canonical-face.mjs` into
+  `src/data/canonicalFace.json`. Vertex order matches landmark indices.
 
 ## Deferred
 ### v2
@@ -83,5 +121,3 @@ for the full spec.
 - Texture pipeline: ordered stages so de-lighting slots in
 - Export system: each format is its own module
 
-## Assets
-- Base head mesh: TBD in Phase 1 — prefer CC0 or procedural; record source here.

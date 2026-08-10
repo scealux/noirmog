@@ -1,4 +1,5 @@
 import { STEPS, useAppStore } from '../state/appStore'
+import { Step2Panel } from './Step2Panel'
 
 const PLACEHOLDERS: Record<number, { sections: { title: string; body: string }[] }> = {
   1: {
@@ -13,18 +14,7 @@ const PLACEHOLDERS: Record<number, { sections: { title: string; body: string }[]
       },
     ],
   },
-  2: {
-    sections: [
-      {
-        title: 'Source',
-        body: 'Upload a performance video or record from your webcam. Keep the head still, evenly lit. (Phase 1–2)',
-      },
-      {
-        title: 'Tracking',
-        body: 'Per-frame face tracking, stabilization, and UV texture extraction with live progress. (Phase 1–2)',
-      },
-    ],
-  },
+  2: { sections: [] },
   3: {
     sections: [
       {
@@ -57,16 +47,21 @@ export function StepPanel() {
         </h2>
         <p className="blurb">{step.blurb}</p>
       </div>
-      {placeholder.sections.map((section) => (
-        <div className="panel-section" key={section.title}>
-          <h3>{section.title}</h3>
-          <p>{section.body}</p>
-        </div>
-      ))}
-      <div className="placeholder-note">
-        Phase 0 shell — controls arrive with their phases. Try Settings → Diagnostics to see the
-        progress and logging system in action.
-      </div>
+      {step.id === 2 ? (
+        <Step2Panel />
+      ) : (
+        <>
+          {placeholder.sections.map((section) => (
+            <div className="panel-section" key={section.title}>
+              <h3>{section.title}</h3>
+              <p>{section.body}</p>
+            </div>
+          ))}
+          <div className="placeholder-note">
+            These controls arrive in a later phase. Step 2 (Capture Performance) is live.
+          </div>
+        </>
+      )}
     </aside>
   )
 }

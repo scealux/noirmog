@@ -401,6 +401,54 @@ input[type='color'] {
   transform: scaleX(-1); /* mirror like a mirror — less disorienting for the subject */
 }
 
+.slot-filled {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.guided-steps {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.guided-steps .active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.guided-steps .done {
+  color: var(--ok);
+}
+
+.guided-video-wrap {
+  position: relative;
+}
+
+.guided-countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 64px;
+  font-weight: 700;
+  color: var(--accent);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+
+select {
+  font: inherit;
+  color: inherit;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+
 .rec-start {
   color: var(--err);
 }

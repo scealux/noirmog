@@ -162,6 +162,11 @@ export class FaceTextureWarper {
     this.scene.background = new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255).convertSRGBToLinear()
   }
 
+  /** Use a baked base texture (side-fill) behind the live face instead of a flat color. */
+  setBackgroundTexture(texture: THREE.Texture | null): void {
+    if (texture) this.scene.background = texture
+  }
+
   /** Render the warp scene straight to a renderer's canvas (for exports). */
   renderToCanvas(renderer: THREE.WebGLRenderer): void {
     this.videoTexture.needsUpdate = true

@@ -8,6 +8,27 @@ import {
   useFittingStore,
   type KeyPointMap,
 } from '../state/fittingStore'
+import { GuidedCapture } from './GuidedCapture'
+import type { PhotoSlot } from '../lib/projectionBaker'
+
+const SIDE_SLOTS: { slot: PhotoSlot; label: string }[] = [
+  { slot: 'left', label: 'Left' },
+  { slot: 'right', label: 'Right' },
+  { slot: 'back', label: 'Back' },
+  { slot: 'top', label: 'Top' },
+]
+
+// Dev-only sample side photos.
+const DEV_SIDE_PHOTOS = import.meta.env.DEV
+  ? [
+      { slot: 'left' as PhotoSlot, name: 'leftside.jpg' },
+      { slot: 'right' as PhotoSlot, name: 'rightside.jpg' },
+      { slot: 'back' as PhotoSlot, name: 'back.jpg' },
+    ].map((p) => ({
+      ...p,
+      url: '/@fs' + encodeURI(`/Users/afiel/Developer/Noirmog/sample side textures/${p.name}`),
+    }))
+  : []
 
 // Dev-only test photos from the local reference folder.
 const DEV_PHOTOS = import.meta.env.DEV
@@ -42,11 +63,20 @@ export function Step1Panel() {
     resetMorph,
   } = useFittingStore()
   const log = useTaskStore((s) => s.log)
+  const slotPhotos = useFittingStore((s) => s.slotPhotos)
+  const mirrorFill = useFittingStore((s) => s.mirrorFill)
+  const setMirrorFill = useFittingStore((s) => s.setMirrorFill)
+  const setSlotPhoto = useFittingStore((s) => s.setSlotPhoto)
+  const adjustSlotPhoto = useFittingStore((s) => s.adjustSlotPhoto)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const slotInputRef = useRef<HTMLInputElement>(null)
+  const pendingSlot = useRef<PhotoSlot>('left')
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const dragIndex = useRef<number | null>(null)
   const [detecting, setDetecting] = useState(false)
+  const [guided, setGuided] = useState(false)
+  const [activeSlot, setActiveSlot] = useState<PhotoSlot>('left')
 
   // Apply the current morph to the head whenever it changes.
   useEffect(() => {
@@ -221,8 +251,11 @@ export function Step1Panel() {
           onChange={onFileChosen}
         />
         <div className="button-row">
-          <button onClick={() => fileInputRef.current?.click()} disabled={detecting}>
+          <button onClick={() => fileInputRef.current?.click()} disabled={detecting || guided}>
             {detecting ? 'Detecting…' : 'Front photo…'}
+          </button>
+          <button onClick={() => setGuided(true)} disabled={guided}>
+            Guided webcam capture…
           </button>
           {DEV_PHOTOS.map((p) => (
             <button key={p.name} onClick={() => void detectOnPhoto(p.url, p.name)} disabled={detecting}>
@@ -230,6 +263,12 @@ export function Step1Panel() {
             </button>
           ))}
         </div>
+        {guided && (
+          <GuidedCapture
+            onDone={() => setGuided(false)}
+            onFrontPhoto={(url) => void detectOnPhoto(url, 'webcam-front.jpg')}
+          />
+        )}
         {frontPhoto ? (
           <canvas
             ref={canvasRef}
@@ -245,6 +284,105 @@ export function Step1Panel() {
             Optional. Landmarks are auto-detected; drag the points to correct them. Without a
             photo, the default head passes straight through.
           </p>
+        )}
+      </div>
+
+      <div className="panel-section">
+        <h3>Side &amp; back photos</h3>
+        <input
+          ref={slotInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) {
+              setSlotPhoto(pendingSlot.current, URL.createObjectURL(file))
+              setActiveSlot(pendingSlot.current)
+              log('info', 'Base mesh', `${pendingSlot.current} photo loaded ("${file.name}")`)
+            }
+            e.target.value = ''
+          }}
+        />
+        <div className="button-row">
+          {SIDE_SLOTS.map(({ slot, label }) => (
+            <button
+              key={slot}
+              className={slotPhotos[slot] ? 'slot-filled' : ''}
+              onClick={() => {
+                pendingSlot.current = slot
+                slotInputRef.current?.click()
+              }}
+              onDoubleClick={() => setSlotPhoto(slot, null)}
+              title={slotPhotos[slot] ? 'Loaded — double-click to remove' : `Upload ${label} photo`}
+            >
+              {label}
+              {slotPhotos[slot] ? ' ✓' : ''}
+            </button>
+          ))}
+        </div>
+        {DEV_SIDE_PHOTOS.length > 0 && (
+          <div className="button-row" style={{ marginTop: 6 }}>
+            <button
+              onClick={() => {
+                for (const p of DEV_SIDE_PHOTOS) setSlotPhoto(p.slot, p.url)
+                log('info', 'Base mesh', 'Loaded sample side photos')
+              }}
+            >
+              Load sample set
+            </button>
+          </div>
+        )}
+        {Object.keys(slotPhotos).length > 0 && (
+          <>
+            <label className="check-label" style={{ margin: '8px 0' }}>
+              <input
+                type="checkbox"
+                checked={mirrorFill}
+                onChange={(e) => setMirrorFill(e.target.checked)}
+              />
+              Mirror-fill missing side
+            </label>
+            <div className="slider-row">
+              <span className="slider-label">Adjust</span>
+              <select
+                value={activeSlot}
+                onChange={(e) => setActiveSlot(e.target.value as PhotoSlot)}
+                style={{ flex: 1 }}
+              >
+                {SIDE_SLOTS.filter((s) => slotPhotos[s.slot]).map((s) => (
+                  <option key={s.slot} value={s.slot}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {slotPhotos[activeSlot] &&
+              (
+                [
+                  ['Zoom', 'scale', 0.5, 2, 1],
+                  ['Shift X', 'offsetX', -0.4, 0.4, 0],
+                  ['Shift Y', 'offsetY', -0.4, 0.4, 0],
+                  ['Exposure', 'exposure', 0.5, 2, 1],
+                ] as const
+              ).map(([label, key, min, max, def]) => (
+                <div className="slider-row" key={key}>
+                  <span className="slider-label">{label}</span>
+                  <input
+                    type="range"
+                    min={min}
+                    max={max}
+                    step={0.01}
+                    value={slotPhotos[activeSlot]![key]}
+                    onChange={(e) => adjustSlotPhoto(activeSlot, key, Number(e.target.value))}
+                    onDoubleClick={() => adjustSlotPhoto(activeSlot, key, def)}
+                    title="Double-click to reset"
+                  />
+                  <span className="slider-value">{slotPhotos[activeSlot]![key].toFixed(2)}</span>
+                </div>
+              ))}
+            <p>Photos bake into the head texture behind the live face once a performance is tracked.</p>
+          </>
         )}
       </div>
 

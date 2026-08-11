@@ -7,6 +7,7 @@ import { ChannelSampler, applyChannels, type ChannelValues } from '../lib/channe
 import { frameForTime, landmarksForFrame } from '../lib/trackingData'
 import { getPerformanceVideo, usePerformanceStore } from '../state/performanceStore'
 import { useFittingStore } from '../state/fittingStore'
+import { ProjectionBaker } from '../lib/projectionBaker'
 
 const NEUTRAL_SKIN = new THREE.Color('#9a8578')
 
@@ -66,10 +67,30 @@ export function HeadBust() {
   }, [warper, faceFit.feather])
 
   const skinColorOverride = usePerformanceStore((s) => s.skinColorOverride)
+  const bakeVersion = useFittingStore((s) => s.bakeVersion)
+
+  const baker = useMemo(() => new ProjectionBaker(head.geometry), [head])
+  useEffect(() => () => baker.dispose(), [baker])
+
+  // Background behind the live face: baked side-fill photos when present,
+  // otherwise the flat (auto-sampled or overridden) skin tone.
   useEffect(() => {
     if (!warper || !tracking) return
-    warper.setBackgroundColor(skinColorOverride ?? tracking.skinColor)
-  }, [warper, tracking, skinColorOverride])
+    const { slotPhotos, mirrorFill } = useFittingStore.getState()
+    const skin = skinColorOverride ?? tracking.skinColor
+    if (Object.keys(slotPhotos).length === 0) {
+      warper.setBackgroundColor(skin)
+      return
+    }
+    let cancelled = false
+    void baker.bake(gl, slotPhotos, skin, mirrorFill).then(() => {
+      if (!cancelled) warper.setBackgroundTexture(baker.texture)
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [warper, tracking, skinColorOverride, bakeVersion, baker, gl])
 
   const sampler = useMemo(() => (tracking ? new ChannelSampler(tracking) : null), [tracking])
 

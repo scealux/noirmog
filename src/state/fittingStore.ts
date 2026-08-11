@@ -4,6 +4,9 @@ import {
   type HeadMorphSettings,
 } from '../lib/headMesh'
 import { canonicalVertex } from '../lib/canonicalFace'
+import type { PhotoSlot, SlotPhotos } from '../lib/projectionBaker'
+
+export const DEFAULT_SLOT_PHOTO = { scale: 1, offsetX: 0, offsetY: 0, exposure: 1 }
 
 /**
  * Landmarks used to measure facial proportions. These are the draggable points
@@ -35,6 +38,12 @@ interface FittingState {
   /** Bumped whenever the head geometry changes so dependents re-fit. */
   morphVersion: number
 
+  /** Side/back reference photos for the baked base texture. */
+  slotPhotos: SlotPhotos
+  mirrorFill: boolean
+  /** Bumped whenever the baked base texture must be regenerated. */
+  bakeVersion: number
+
   setFrontPhoto: (photo: PhotoInfo | null) => void
   setSidePhoto: (photo: PhotoInfo | null) => void
   setKeyPoints: (points: KeyPointMap) => void
@@ -43,6 +52,10 @@ interface FittingState {
   setMorph: (morph: HeadMorphSettings) => void
   bumpMorphVersion: () => void
   resetMorph: () => void
+
+  setSlotPhoto: (slot: PhotoSlot, url: string | null) => void
+  adjustSlotPhoto: (slot: PhotoSlot, key: 'scale' | 'offsetX' | 'offsetY' | 'exposure', value: number) => void
+  setMirrorFill: (v: boolean) => void
 }
 
 export const useFittingStore = create<FittingState>((set) => ({
@@ -51,6 +64,9 @@ export const useFittingStore = create<FittingState>((set) => ({
   keyPoints: {},
   morph: { ...DEFAULT_HEAD_MORPH },
   morphVersion: 0,
+  slotPhotos: {},
+  mirrorFill: true,
+  bakeVersion: 0,
 
   setFrontPhoto: (photo) => set({ frontPhoto: photo, keyPoints: {} }),
   setSidePhoto: (photo) => set({ sidePhoto: photo }),
@@ -61,6 +77,24 @@ export const useFittingStore = create<FittingState>((set) => ({
   setMorph: (morph) => set({ morph }),
   bumpMorphVersion: () => set((s) => ({ morphVersion: s.morphVersion + 1 })),
   resetMorph: () => set({ morph: { ...DEFAULT_HEAD_MORPH } }),
+
+  setSlotPhoto: (slot, url) =>
+    set((s) => {
+      const slotPhotos = { ...s.slotPhotos }
+      if (url) slotPhotos[slot] = { ...DEFAULT_SLOT_PHOTO, url }
+      else delete slotPhotos[slot]
+      return { slotPhotos, bakeVersion: s.bakeVersion + 1 }
+    }),
+  adjustSlotPhoto: (slot, key, value) =>
+    set((s) => {
+      const photo = s.slotPhotos[slot]
+      if (!photo) return s
+      return {
+        slotPhotos: { ...s.slotPhotos, [slot]: { ...photo, [key]: value } },
+        bakeVersion: s.bakeVersion + 1,
+      }
+    }),
+  setMirrorFill: (v) => set((s) => ({ mirrorFill: v, bakeVersion: s.bakeVersion + 1 })),
 }))
 
 if (import.meta.env.DEV) {

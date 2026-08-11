@@ -4,6 +4,7 @@ import { Grid, OrbitControls } from '@react-three/drei'
 import { HeadBust } from './HeadBust'
 import { DevDebugBridge } from './DevDebugBridge'
 import { useTaskStore } from '../state/taskStore'
+import { viewportHandle } from '../lib/viewportHandle'
 
 class ViewportErrorBoundary extends Component<
   { children: ReactNode },
@@ -36,7 +37,13 @@ class ViewportErrorBoundary extends Component<
 export function Viewport() {
   return (
     <ViewportErrorBoundary>
-      <Canvas camera={{ position: [0.28, 0.45, 0.95], fov: 40 }}>
+      <Canvas
+        camera={{ position: [0.28, 0.45, 0.95], fov: 40 }}
+        gl={{ preserveDrawingBuffer: true }}
+        onCreated={({ gl }) => {
+          viewportHandle.canvas = gl.domElement
+        }}
+      >
         <color attach="background" args={['#161616']} />
         <ambientLight intensity={0.6} />
         <directionalLight position={[2, 3, 2]} intensity={1.3} />

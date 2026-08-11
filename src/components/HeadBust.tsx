@@ -65,6 +65,12 @@ export function HeadBust() {
     warper?.setFeather(faceFit.feather)
   }, [warper, faceFit.feather])
 
+  const skinColorOverride = usePerformanceStore((s) => s.skinColorOverride)
+  useEffect(() => {
+    if (!warper || !tracking) return
+    warper.setBackgroundColor(skinColorOverride ?? tracking.skinColor)
+  }, [warper, tracking, skinColorOverride])
+
   const sampler = useMemo(() => (tracking ? new ChannelSampler(tracking) : null), [tracking])
 
   useEffect(() => {

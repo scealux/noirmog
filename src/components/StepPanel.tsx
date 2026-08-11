@@ -1,6 +1,7 @@
 import { STEPS, useAppStore } from '../state/appStore'
 import { Step1Panel } from './Step1Panel'
 import { Step2Panel } from './Step2Panel'
+import { Step3Panel } from './Step3Panel'
 
 const PLACEHOLDERS: Record<number, { sections: { title: string; body: string }[] }> = {
   1: {
@@ -48,6 +49,8 @@ export function StepPanel() {
         <Step1Panel />
       ) : step.id === 2 ? (
         <Step2Panel />
+      ) : step.id === 3 ? (
+        <Step3Panel />
       ) : (
         <>
           {placeholder.sections.map((section) => (

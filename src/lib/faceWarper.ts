@@ -157,6 +157,18 @@ export class FaceTextureWarper {
     this.recomputeAlpha()
   }
 
+  /** Replace the background skin tone (sRGB 0..255). */
+  setBackgroundColor(rgb: [number, number, number]): void {
+    this.scene.background = new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255).convertSRGBToLinear()
+  }
+
+  /** Render the warp scene straight to a renderer's canvas (for exports). */
+  renderToCanvas(renderer: THREE.WebGLRenderer): void {
+    this.videoTexture.needsUpdate = true
+    renderer.setRenderTarget(null)
+    renderer.render(this.scene, this.camera)
+  }
+
   private applyLandmarkUV(): void {
     const pos = this.posAttr.array as Float32Array
     for (let i = 0; i < CANONICAL_VERTEX_COUNT; i++) {

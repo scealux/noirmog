@@ -361,6 +361,29 @@ input[type='checkbox'] {
   color: var(--text-2);
 }
 
+.export-list button {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  text-align: left;
+}
+
+.export-list p {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+input[type='color'] {
+  width: 44px;
+  height: 26px;
+  padding: 2px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
 .fitting-canvas {
   width: 100%;
   margin-top: 8px;

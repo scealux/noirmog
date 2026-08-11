@@ -69,6 +69,8 @@ interface PerformanceState {
 
   channelSettings: ChannelEditSettings
   faceFit: FaceFitEditSettings
+  /** Overrides the auto-sampled skin tone (sRGB 0..255); null = auto. */
+  skinColorOverride: [number, number, number] | null
 
   loadVideo: (url: string, name: string) => Promise<void>
   setTracking: (data: TrackingData | null) => void
@@ -84,6 +86,7 @@ interface PerformanceState {
     key: K,
     value: FaceFitEditSettings[K],
   ) => void
+  setSkinColorOverride: (rgb: [number, number, number] | null) => void
 }
 
 /**
@@ -119,6 +122,7 @@ export const usePerformanceStore = create<PerformanceState>((set, get) => ({
 
   channelSettings: { ...DEFAULT_CHANNEL_SETTINGS },
   faceFit: { ...DEFAULT_FACE_FIT },
+  skinColorOverride: null,
 
   loadVideo: async (url, name) => {
     const video = getPerformanceVideo()
@@ -170,4 +174,6 @@ export const usePerformanceStore = create<PerformanceState>((set, get) => ({
     set((state) => ({ channelSettings: { ...state.channelSettings, [key]: value } })),
 
   setFaceFit: (key, value) => set((state) => ({ faceFit: { ...state.faceFit, [key]: value } })),
+
+  setSkinColorOverride: (rgb) => set({ skinColorOverride: rgb }),
 }))

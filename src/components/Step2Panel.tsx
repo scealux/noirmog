@@ -238,6 +238,7 @@ export function Step2Panel() {
     step: number,
     display: string,
     onChange: (v: number) => void,
+    resetValue?: number,
   ) => (
     <div className="slider-row">
       <span className="slider-label">{label}</span>
@@ -248,6 +249,8 @@ export function Step2Panel() {
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
+        onDoubleClick={resetValue !== undefined ? () => onChange(resetValue) : undefined}
+        title={resetValue !== undefined ? 'Double-click to reset' : undefined}
       />
       <span className="slider-value">{display}</span>
     </div>
@@ -363,10 +366,10 @@ export function Step2Panel() {
             <h3>Trim</h3>
             {sliderRow('In', trimStart, 0, videoDuration, 0.01, formatDuration(trimStart), (v) =>
               setTrim(v, trimEnd),
-            )}
+            0)}
             {sliderRow('Out', trimEnd, 0, videoDuration, 0.01, formatDuration(trimEnd), (v) =>
               setTrim(trimStart, v),
-            )}
+            videoDuration)}
             <div className="button-row">
               <button onClick={() => setTrim(scrub, trimEnd)}>Set In here</button>
               <button onClick={() => setTrim(trimStart, scrub)}>Set Out here</button>
@@ -385,6 +388,7 @@ export function Step2Panel() {
               0.01,
               `${Math.round(faceFit.scale * 100)}%`,
               (v) => setFaceFit('scale', v),
+              DEFAULT_FACE_FIT.scale,
             )}
             {sliderRow(
               'Height',
@@ -394,6 +398,7 @@ export function Step2Panel() {
               0.001,
               `${(faceFit.offsetY * 100).toFixed(1)}cm`,
               (v) => setFaceFit('offsetY', v),
+              DEFAULT_FACE_FIT.offsetY,
             )}
             {sliderRow(
               'Feather',
@@ -403,6 +408,7 @@ export function Step2Panel() {
               0.005,
               faceFit.feather === 0 ? 'hard' : faceFit.feather.toFixed(3),
               (v) => setFaceFit('feather', v),
+              DEFAULT_FACE_FIT.feather,
             )}
             <div className="button-row">
               <button
@@ -427,6 +433,7 @@ export function Step2Panel() {
               0.05,
               `${Math.round(channelSettings.headMotionScale * 100)}%`,
               (v) => setChannelSetting('headMotionScale', v),
+              DEFAULT_CHANNEL_SETTINGS.headMotionScale,
             )}
             {sliderRow(
               'Jaw',
@@ -436,6 +443,7 @@ export function Step2Panel() {
               0.05,
               `${Math.round(channelSettings.jawScale * 100)}%`,
               (v) => setChannelSetting('jawScale', v),
+              DEFAULT_CHANNEL_SETTINGS.jawScale,
             )}
             {sliderRow(
               'Smoothing',
@@ -445,6 +453,7 @@ export function Step2Panel() {
               1,
               channelSettings.smoothing === 0 ? 'off' : `±${channelSettings.smoothing}f`,
               (v) => setChannelSetting('smoothing', v),
+              DEFAULT_CHANNEL_SETTINGS.smoothing,
             )}
             <div className="button-row">
               <button

@@ -200,6 +200,8 @@ export function Step1Panel() {
         step={0.01}
         value={morph[key]}
         onChange={(e) => setMorphValue(key, Number(e.target.value))}
+        onDoubleClick={() => setMorphValue(key, DEFAULT_HEAD_MORPH[key])}
+        title="Double-click to reset"
       />
       <span className="slider-value">{Math.round(morph[key] * 100)}%</span>
     </div>

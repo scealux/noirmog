@@ -39,10 +39,22 @@ for the full spec.
   huge frame sequences in memory
 
 ### Phase 2 — Capture Pipeline & Robustness
-- [ ] Step 2 UX: file upload + bare getUserMedia recorder
-- [ ] Responsive processing (chunked/yielding or worker), tracking-loss handling (log + hold last good)
-- [ ] Audio sync across trims and varied source framerates/resolutions
-- [ ] Verify with a real moving-head webcam clip
+- [x] Step 2 UX: file upload + bare getUserMedia recorder (mirror preview, 2-min cap with
+      auto-stop, mp4/webm mime pick, MediaRecorder Infinity-duration fix on load).
+      Error paths verified (NotFoundError surfaced with hint); happy-path recording still
+      needs a check on a machine with a real camera.
+- [x] Responsive processing: the tracking loop yields to the event loop on every frame
+      (seek await), so the UI stays interactive; tracking-loss frames hold last good frame,
+      log a warning, and are counted in the panel
+- [x] Audio sync across trims and varied source framerates/resolutions: fixed 30fps
+      resampling normalizes any source rate; playback (audio+texture+channels) is driven by
+      the video element itself, and trim looping keeps everything in sync (verified: playback
+      oscillates cleanly within the trim range)
+- [x] Verified with real webcam clips where the head moves (face stays locked in texture
+      space through turns and grimaces)
+- [x] Pulled forward by request — capture editing tools: trim In/Out with loop (was Phase 4)
+      and non-destructive channel edit settings (head-motion scale, jaw scale, temporal
+      smoothing — a first slice of v3's "animation curve editing")
 
 ### Phase 3 — Base Mesh Fitting (Step 1)
 - [ ] Front + side photo upload (both optional), auto landmarks → draggable points + coarse sliders
@@ -50,7 +62,8 @@ for the full spec.
 - [ ] Verify morphed head works through Phase 2 pipeline
 
 ### Phase 4 — Edit & Export (Step 3)
-- [ ] Trim/cut performance range
+- [x] Trim/cut performance range (landed early in Phase 2, lives in Step 2 panel — decide in
+      Phase 4 whether it moves to Step 3 or stays)
 - [ ] Neck/head blend: auto-sampled skin color default, picker override, feathered blend zone
 - [ ] Exports: (1) GLB + side-by-side MP4 + viewer snippet, (2) GLB baked frame-sequence texture,
       (3) stabilized UV texture MP4 alone, (4) rendered MP4 of the bust via MediaRecorder
@@ -90,6 +103,11 @@ for the full spec.
   warp geometry, which would otherwise backface-cull every triangle.
 - 2026-08-10: VideoTexture uploads are forced every warp render (needsUpdate) — the default
   requestVideoFrameCallback path misses paused/seeked frames, breaking scrubbing.
+- 2026-08-10: No worker for tracking (yet): the seek-stepped loop already yields per frame
+  and MediaPipe's GPU delegate wants the main thread's WebGL. Revisit only if long clips
+  prove sluggish in practice.
+- 2026-08-10: Channel edit settings apply at sample time (never baked into tracking data),
+  so re-tweaking never requires re-tracking; smoothing is a simple centered moving average.
 
 ## Assets & Sources
 - Base head mesh: user-authored low-poly head ("Noirmog Head UV Ref/", CC: project-own).

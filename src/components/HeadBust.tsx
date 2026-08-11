@@ -62,7 +62,8 @@ export function HeadBust() {
     const frame = frameForTime(tracking, video.currentTime)
     warper.update(landmarksForFrame(tracking, frame))
     warper.render(gl)
-    const values = sampler.sample(frame, channelsRef.current)
+    const settings = usePerformanceStore.getState().channelSettings
+    const values = sampler.sample(frame, settings, channelsRef.current)
     applyChannels(values, { headGroup: groupRef.current, mesh: meshRef.current })
   })
 

@@ -278,6 +278,72 @@ button:focus-visible {
   font-size: 12px;
 }
 
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.check-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-1);
+  font-size: 12px;
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.slider-row .slider-label {
+  width: 76px;
+  flex-shrink: 0;
+  color: var(--text-1);
+  font-size: 12px;
+}
+
+.slider-row input[type='range'] {
+  flex: 1;
+  min-width: 0;
+}
+
+.slider-row .slider-value {
+  width: 48px;
+  flex-shrink: 0;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-2);
+}
+
+.recorder-preview {
+  width: 100%;
+  border-radius: 6px;
+  background: #000;
+  margin-bottom: 8px;
+  transform: scaleX(-1); /* mirror like a mirror — less disorienting for the subject */
+}
+
+.rec-start {
+  color: var(--err);
+}
+
+.rec-stop {
+  color: var(--err);
+  border-color: var(--err);
+}
+
+.rec-time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--err);
+}
+
 .placeholder-note {
   margin: 10px 14px;
   padding: 10px 12px;

@@ -6,20 +6,21 @@ import {
 import { canonicalVertex } from '../lib/canonicalFace'
 import type { PhotoSlot, SlotPhotos } from '../lib/projectionBaker'
 import { setActiveHeadModel, type HeadModelId } from '../lib/headMesh'
+import { persistPhoto, removePersistedPhoto } from '../lib/persistence'
 
-export const DEFAULT_SLOT_PHOTO = { scale: 1, offsetX: 0, offsetY: 0, exposure: 1 }
+export const DEFAULT_SLOT_PHOTO = { scale: 1, offsetX: 0, offsetY: 0, exposure: 1, rotation: 0 }
 
 /**
  * Landmarks used to measure facial proportions. These are the draggable points
  * in the Step 1 photo view; positions are normalized photo coords (0..1).
  */
 export const KEY_POINTS = [
-  { index: 10, label: 'Forehead top' },
-  { index: 152, label: 'Chin' },
-  { index: 234, label: 'Face edge L' },
-  { index: 454, label: 'Face edge R' },
-  { index: 172, label: 'Jaw corner L' },
-  { index: 397, label: 'Jaw corner R' },
+  { index: 10, label: 'Forehead top', color: '#d9a441', hint: 'Center of the forehead at the hairline' },
+  { index: 152, label: 'Chin', color: '#6fbf73', hint: 'Bottom tip of the chin' },
+  { index: 234, label: 'Face edge L', color: '#5aa9e6', hint: 'Left edge of the face at cheekbone height, just in front of the ear' },
+  { index: 454, label: 'Face edge R', color: '#4ecdc4', hint: 'Right edge of the face at cheekbone height, just in front of the ear' },
+  { index: 172, label: 'Jaw corner L', color: '#e06c9f', hint: 'Corner of the left jawbone, below the ear' },
+  { index: 397, label: 'Jaw corner R', color: '#b085f5', hint: 'Corner of the right jawbone, below the ear' },
 ] as const
 
 export type KeyPointMap = Record<number, [number, number]>
@@ -58,7 +59,7 @@ interface FittingState {
   resetMorph: () => void
 
   setSlotPhoto: (slot: PhotoSlot, url: string | null) => void
-  adjustSlotPhoto: (slot: PhotoSlot, key: 'scale' | 'offsetX' | 'offsetY' | 'exposure', value: number) => void
+  adjustSlotPhoto: (slot: PhotoSlot, key: 'scale' | 'offsetX' | 'offsetY' | 'exposure' | 'rotation', value: number) => void
   setMirrorFill: (v: boolean) => void
 }
 
@@ -77,7 +78,11 @@ export const useFittingStore = create<FittingState>((set) => ({
   mirrorFill: true,
   bakeVersion: 0,
 
-  setFrontPhoto: (photo) => set({ frontPhoto: photo, keyPoints: {} }),
+  setFrontPhoto: (photo) => {
+    if (photo) persistPhoto('front', photo.url)
+    else removePersistedPhoto('front')
+    set({ frontPhoto: photo, keyPoints: {} })
+  },
   setSidePhoto: (photo) => set({ sidePhoto: photo }),
   setKeyPoints: (points) => set({ keyPoints: points }),
   moveKeyPoint: (index, x, y) =>
@@ -90,8 +95,13 @@ export const useFittingStore = create<FittingState>((set) => ({
   setSlotPhoto: (slot, url) =>
     set((s) => {
       const slotPhotos = { ...s.slotPhotos }
-      if (url) slotPhotos[slot] = { ...DEFAULT_SLOT_PHOTO, url }
-      else delete slotPhotos[slot]
+      if (url) {
+        slotPhotos[slot] = { ...DEFAULT_SLOT_PHOTO, url }
+        persistPhoto(`slot:${slot}`, url)
+      } else {
+        delete slotPhotos[slot]
+        removePersistedPhoto(`slot:${slot}`)
+      }
       return { slotPhotos, bakeVersion: s.bakeVersion + 1 }
     }),
   adjustSlotPhoto: (slot, key, value) =>

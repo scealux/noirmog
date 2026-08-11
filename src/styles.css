@@ -235,11 +235,19 @@ button:focus-visible {
 .side-panel {
   display: flex;
   flex-direction: column;
-  width: 300px;
+  width: var(--panel-width, 300px);
   flex-shrink: 0;
   background: var(--bg-1);
   border-left: 1px solid var(--border);
   overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.side-panel .button-row button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel-header {
@@ -359,6 +367,88 @@ input[type='checkbox'] {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-2);
+}
+
+.slider-number {
+  width: 58px;
+  flex-shrink: 0;
+  padding: 2px 2px 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-0);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.slider-number:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Photo slot tabs */
+.slot-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.slot-tabs button {
+  flex: 1;
+  padding: 4px 6px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.slot-tabs button.active {
+  color: var(--text-0);
+  border-bottom-color: var(--accent);
+}
+
+.slot-tabs button.filled {
+  color: var(--accent);
+}
+
+.slot-tabs button.filled.active {
+  color: var(--accent);
+}
+
+/* Key point legend */
+.kp-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-1);
+}
+
+.kp-legend .dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  border-radius: 50%;
+  vertical-align: -1px;
+}
+
+/* Panel resize divider */
+.panel-divider {
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: var(--bg-1);
+  border-left: 1px solid var(--border);
+}
+
+.panel-divider:hover,
+.panel-divider.dragging {
+  background: var(--accent-dim);
 }
 
 .export-list button {

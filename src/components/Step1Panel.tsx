@@ -11,6 +11,7 @@ import {
 import { GuidedCapture } from './GuidedCapture'
 import type { PhotoSlot } from '../lib/projectionBaker'
 import { HEAD_MODELS, type HeadModelId } from '../lib/headMesh'
+import { SliderRow } from './SliderRow'
 
 const SIDE_SLOTS: { slot: PhotoSlot; label: string }[] = [
   { slot: 'left', label: 'Left' },
@@ -115,10 +116,10 @@ export function Step1Panel() {
       const y = p[1] * h
       ctx.beginPath()
       ctx.arc(x, y, POINT_RADIUS, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(217, 164, 65, 0.35)'
+      ctx.fillStyle = kp.color + '59'
       ctx.fill()
       ctx.lineWidth = 1.5
-      ctx.strokeStyle = '#d9a441'
+      ctx.strokeStyle = kp.color
       ctx.stroke()
     }
   }, [frontPhoto, keyPoints])
@@ -222,20 +223,15 @@ export function Step1Panel() {
   }
 
   const sliderRow = (label: string, key: keyof HeadMorphSettings) => (
-    <div className="slider-row">
-      <span className="slider-label">{label}</span>
-      <input
-        type="range"
-        min={0.8}
-        max={1.25}
-        step={0.01}
-        value={morph[key]}
-        onChange={(e) => setMorphValue(key, Number(e.target.value))}
-        onDoubleClick={() => setMorphValue(key, DEFAULT_HEAD_MORPH[key])}
-        title="Double-click to reset"
-      />
-      <span className="slider-value">{Math.round(morph[key] * 100)}%</span>
-    </div>
+    <SliderRow
+      label={label}
+      value={morph[key]}
+      min={0.8}
+      max={1.25}
+      step={0.01}
+      onChange={(v) => setMorphValue(key, v)}
+      resetValue={DEFAULT_HEAD_MORPH[key]}
+    />
   )
 
   const canvasAspect = frontPhoto ? frontPhoto.height / frontPhoto.width : 0.75
@@ -293,15 +289,29 @@ export function Step1Panel() {
           />
         )}
         {frontPhoto ? (
-          <canvas
-            ref={canvasRef}
-            className="fitting-canvas"
-            width={272}
-            height={Math.round(272 * canvasAspect)}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-          />
+          <>
+            <canvas
+              ref={canvasRef}
+              className="fitting-canvas"
+              width={272}
+              height={Math.round(272 * canvasAspect)}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+            />
+            <div className="kp-legend">
+              {KEY_POINTS.map((kp) => (
+                <span key={kp.index} title={kp.hint}>
+                  <span className="dot" style={{ background: kp.color }} />
+                  {kp.label}
+                </span>
+              ))}
+            </div>
+            <p style={{ marginTop: 6 }}>
+              Drag any point onto its landmark (hover a name above for where it belongs); the
+              morph updates when you release.
+            </p>
+          </>
         ) : (
           <p style={{ marginTop: 8 }}>
             Optional. Landmarks are auto-detected; drag the points to correct them. Without a
@@ -327,25 +337,31 @@ export function Step1Panel() {
             e.target.value = ''
           }}
         />
-        <div className="button-row">
+        <div className="slot-tabs">
           {SIDE_SLOTS.map(({ slot, label }) => (
             <button
               key={slot}
-              className={slotPhotos[slot] ? 'slot-filled' : ''}
-              onClick={() => {
-                pendingSlot.current = slot
-                slotInputRef.current?.click()
-              }}
-              onDoubleClick={() => setSlotPhoto(slot, null)}
-              title={slotPhotos[slot] ? 'Loaded — double-click to remove' : `Upload ${label} photo`}
+              className={`${activeSlot === slot ? 'active' : ''} ${slotPhotos[slot] ? 'filled' : ''}`}
+              onClick={() => setActiveSlot(slot)}
             >
               {label}
               {slotPhotos[slot] ? ' ✓' : ''}
             </button>
           ))}
         </div>
-        {DEV_SIDE_PHOTOS.length > 0 && (
-          <div className="button-row" style={{ marginTop: 6 }}>
+        <div className="button-row">
+          <button
+            onClick={() => {
+              pendingSlot.current = activeSlot
+              slotInputRef.current?.click()
+            }}
+          >
+            {slotPhotos[activeSlot] ? 'Replace photo…' : 'Upload photo…'}
+          </button>
+          {slotPhotos[activeSlot] && (
+            <button onClick={() => setSlotPhoto(activeSlot, null)}>Remove</button>
+          )}
+          {DEV_SIDE_PHOTOS.length > 0 && (
             <button
               onClick={() => {
                 for (const p of DEV_SIDE_PHOTOS) setSlotPhoto(p.slot, p.url)
@@ -354,57 +370,42 @@ export function Step1Panel() {
             >
               Load sample set
             </button>
-          </div>
-        )}
-        {Object.keys(slotPhotos).length > 0 && (
-          <>
+          )}
+        </div>
+        {(activeSlot === 'left' || activeSlot === 'right') &&
+          !(slotPhotos.left && slotPhotos.right) && (
             <label className="check-label" style={{ margin: '8px 0' }}>
               <input
                 type="checkbox"
                 checked={mirrorFill}
                 onChange={(e) => setMirrorFill(e.target.checked)}
               />
-              Mirror-fill missing side
+              Mirror-fill the missing side
             </label>
-            <div className="slider-row">
-              <span className="slider-label">Adjust</span>
-              <select
-                value={activeSlot}
-                onChange={(e) => setActiveSlot(e.target.value as PhotoSlot)}
-                style={{ flex: 1 }}
-              >
-                {SIDE_SLOTS.filter((s) => slotPhotos[s.slot]).map((s) => (
-                  <option key={s.slot} value={s.slot}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {slotPhotos[activeSlot] &&
-              (
-                [
-                  ['Zoom', 'scale', 0.5, 2, 1],
-                  ['Shift X', 'offsetX', -0.4, 0.4, 0],
-                  ['Shift Y', 'offsetY', -0.4, 0.4, 0],
-                  ['Exposure', 'exposure', 0.5, 2, 1],
-                ] as const
-              ).map(([label, key, min, max, def]) => (
-                <div className="slider-row" key={key}>
-                  <span className="slider-label">{label}</span>
-                  <input
-                    type="range"
-                    min={min}
-                    max={max}
-                    step={0.01}
-                    value={slotPhotos[activeSlot]![key]}
-                    onChange={(e) => adjustSlotPhoto(activeSlot, key, Number(e.target.value))}
-                    onDoubleClick={() => adjustSlotPhoto(activeSlot, key, def)}
-                    title="Double-click to reset"
-                  />
-                  <span className="slider-value">{slotPhotos[activeSlot]![key].toFixed(2)}</span>
-                </div>
-              ))}
-            <p>Photos bake into the head texture behind the live face once a performance is tracked.</p>
+          )}
+        {slotPhotos[activeSlot] && (
+          <>
+            {(
+              [
+                ['Zoom', 'scale', 0.5, 2, 1],
+                ['Shift X', 'offsetX', -0.4, 0.4, 0],
+                ['Shift Y', 'offsetY', -0.4, 0.4, 0],
+                ['Rotation', 'rotation', -30, 30, 0],
+                ['Exposure', 'exposure', 0.5, 2, 1],
+              ] as const
+            ).map(([label, key, min, max, def]) => (
+              <SliderRow
+                key={key}
+                label={label}
+                value={slotPhotos[activeSlot]![key]}
+                min={min}
+                max={max}
+                step={key === 'rotation' ? 0.5 : 0.01}
+                onChange={(v) => adjustSlotPhoto(activeSlot, key, v)}
+                resetValue={def}
+              />
+            ))}
+            <p>Photos preview on the head immediately and sit behind the live face once tracked.</p>
           </>
         )}
       </div>

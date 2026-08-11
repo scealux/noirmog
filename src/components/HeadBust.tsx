@@ -73,25 +73,41 @@ export function HeadBust() {
   const baker = useMemo(() => new ProjectionBaker(head.geometry), [head])
   useEffect(() => () => baker.dispose(), [baker])
 
-  // Background behind the live face: baked side-fill photos when present,
-  // otherwise the flat (auto-sampled or overridden) skin tone.
+  // Baked side-fill photos: behind the live face when tracked, directly on
+  // the head material when not — photos are visible as soon as they load.
+  // Debounced + serialized so slider drags don't flood the GPU (that froze
+  // the app before).
   useEffect(() => {
-    if (!warper || !tracking) return
     const { slotPhotos, mirrorFill } = useFittingStore.getState()
-    const skin = skinColorOverride ?? tracking.skinColor
+    const skin = skinColorOverride ?? tracking?.skinColor ?? [154, 133, 120]
     if (Object.keys(slotPhotos).length === 0) {
-      warper.setBackgroundColor(skin)
+      warper?.setBackgroundColor(skin as [number, number, number])
+      if (!warper) {
+        material.map = null
+        material.color.copy(NEUTRAL_SKIN)
+        material.needsUpdate = true
+      }
       return
     }
     let cancelled = false
-    void baker.bake(gl, slotPhotos, skin, mirrorFill).then(() => {
-      if (!cancelled) warper.setBackgroundTexture(baker.texture)
-    })
+    const timer = setTimeout(() => {
+      void baker.bake(gl, slotPhotos, skin as [number, number, number], mirrorFill).then(() => {
+        if (cancelled) return
+        if (warper) {
+          warper.setBackgroundTexture(baker.texture)
+        } else {
+          material.map = baker.texture
+          material.color.set('#ffffff')
+          material.needsUpdate = true
+        }
+      })
+    }, 150)
     return () => {
       cancelled = true
+      clearTimeout(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [warper, tracking, skinColorOverride, bakeVersion, baker, gl])
+  }, [warper, tracking, skinColorOverride, bakeVersion, baker, gl, material])
 
   const sampler = useMemo(() => (tracking ? new ChannelSampler(tracking) : null), [tracking])
 
@@ -99,11 +115,10 @@ export function HeadBust() {
     if (warper) {
       material.map = warper.texture
       material.color.set('#ffffff')
-    } else {
-      material.map = null
-      material.color.copy(NEUTRAL_SKIN)
+      material.needsUpdate = true
     }
-    material.needsUpdate = true
+    // No-warper appearance (neutral or baked photos) is handled by the bake
+    // effect above so the two never fight over material.map.
     return () => warper?.dispose()
   }, [warper, material])
 

@@ -62,7 +62,7 @@ export function GuidedCapture({ onDone, onFrontPhoto }: Props) {
   const [stepIndex, setStepIndex] = useState(0)
   const [status, setStatus] = useState('Opening webcam…')
   const [countdown, setCountdown] = useState<number | null>(null)
-  const stateRef = useRef({ hold: 0, counting: false, cancelled: false })
+  const stateRef = useRef({ hold: 0, counting: false, cancelled: false, poseOk: true })
 
   useEffect(() => {
     const st = stateRef.current
@@ -90,10 +90,21 @@ export function GuidedCapture({ onDone, onFrontPhoto }: Props) {
 
     const runCountdown = (step: CaptureStep, seconds: number, onFinish: () => void) => {
       st.counting = true
+      st.poseOk = true
       let remaining = seconds
       setCountdown(remaining)
       beep(880, 120)
       timer = window.setInterval(() => {
+        // Pose-verified steps abort if you drift out of position mid-countdown.
+        if (step.targetYaw !== null && !st.poseOk) {
+          clearInterval(timer)
+          setCountdown(null)
+          beep(300, 250)
+          st.counting = false
+          st.hold = 0
+          setStatus(`Lost the pose — ${step.instruction.toLowerCase()}`)
+          return
+        }
         remaining--
         if (remaining > 0) {
           setCountdown(remaining)
@@ -141,6 +152,20 @@ export function GuidedCapture({ onDone, onFrontPhoto }: Props) {
           if (st.cancelled) return
           const step = CAPTURE_STEPS[currentIndex]
           if (!step) return
+          if (st.counting && step.targetYaw !== null && video.readyState >= 2) {
+            // Track the pose during the countdown so drifting away aborts it.
+            const result = landmarker.detectForVideo(video, nextVideoTimestampMs(66))
+            const matrix = result.facialTransformationMatrixes?.[0]
+            if (matrix) {
+              m4.fromArray(matrix.data)
+              m4.decompose(pos, q, scl)
+              euler.setFromQuaternion(q, 'YXZ')
+              const yaw = THREE.MathUtils.radToDeg(euler.y)
+              st.poseOk = Math.abs(yaw - step.targetYaw) < YAW_TOLERANCE * 1.5
+            } else {
+              st.poseOk = false
+            }
+          }
           if (!st.counting) {
             if (step.targetYaw === null) {
               // Back of head: no face to verify — timed capture.

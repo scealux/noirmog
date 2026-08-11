@@ -10,6 +10,8 @@ export interface SlotPhoto {
   offsetY: number
   /** Exposure trim multiplier on top of auto color normalization. */
   exposure: number
+  /** Rotation of the photo in degrees. */
+  rotation: number
 }
 
 export type SlotPhotos = Partial<Record<PhotoSlot, SlotPhoto>>
@@ -41,10 +43,19 @@ const SLOT_FRAMES: Record<PhotoSlot, { view: THREE.Vector3; uAxis: THREE.Vector3
 
 const BAKE_SIZE = 1024
 
-async function loadTexture(url: string): Promise<THREE.Texture> {
-  const tex = await new THREE.TextureLoader().loadAsync(url)
-  tex.colorSpace = THREE.SRGBColorSpace
-  return tex
+const textureCache = new Map<string, Promise<{ tex: THREE.Texture; avg: [number, number, number] }>>()
+
+function loadTextureCached(url: string): Promise<{ tex: THREE.Texture; avg: [number, number, number] }> {
+  let entry = textureCache.get(url)
+  if (!entry) {
+    entry = new THREE.TextureLoader().loadAsync(url).then((tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace
+      return { tex, avg: averageColor(tex.image as HTMLImageElement) }
+    })
+    entry.catch(() => textureCache.delete(url))
+    textureCache.set(url, entry)
+  }
+  return entry
 }
 
 /** Average color of the central region of a photo (for auto color-matching). */
@@ -95,6 +106,7 @@ export class ProjectionBaker {
   private mesh: THREE.Mesh
   private headGeometry: THREE.BufferGeometry
   private headBounds: THREE.Box3
+  private queue: Promise<void> = Promise.resolve()
 
   constructor(headGeometry: THREE.BufferGeometry) {
     this.headGeometry = headGeometry
@@ -140,7 +152,18 @@ export class ProjectionBaker {
    * it (flipped) for the opposite side. Returns per-slot auto color gains for
    * diagnostics.
    */
-  async bake(
+  bake(
+    renderer: THREE.WebGLRenderer,
+    photos: SlotPhotos,
+    skinColor: [number, number, number],
+    mirrorFill: boolean,
+  ): Promise<void> {
+    // Serialize: overlapping bakes (slider drags) run one at a time.
+    this.queue = this.queue.then(() => this.bakeNow(renderer, photos, skinColor, mirrorFill))
+    return this.queue
+  }
+
+  private async bakeNow(
     renderer: THREE.WebGLRenderer,
     photos: SlotPhotos,
     skinColor: [number, number, number],
@@ -170,8 +193,7 @@ export class ProjectionBaker {
     }
 
     for (const pass of passes) {
-      const tex = await loadTexture(pass.photo.url)
-      const avg = averageColor(tex.image as HTMLImageElement)
+      const { tex, avg } = await loadTextureCached(pass.photo.url)
       // Auto color-match HALFWAY toward the video's sampled skin tone (a full
       // match bleaches hair to skin color when the photo is mostly hair),
       // then apply the user's exposure trim.
@@ -185,7 +207,6 @@ export class ProjectionBaker {
       this.material.map = tex
       this.material.color.setRGB(gain[0], gain[1], gain[2])
       renderer.render(this.scene, this.camera)
-      tex.dispose()
     }
 
     renderer.setRenderTarget(prev)
@@ -217,8 +238,16 @@ export class ProjectionBaker {
       v.fromBufferAttribute(posAttr, i).sub(center)
       n.fromBufferAttribute(normalAttr, i)
       let a = v.dot(frame.uAxis)
-      const b = v.dot(frame.vAxis)
+      let b = v.dot(frame.vAxis)
       if (mirrored) a = -a
+      if (photo.rotation) {
+        const rad = (photo.rotation * Math.PI) / 180
+        const ca = Math.cos(rad)
+        const sa = Math.sin(rad)
+        const ra = a * ca - b * sa
+        b = a * sa + b * ca
+        a = ra
+      }
       const u = 0.5 + (a / (headSpan * aspect)) * (0.7 / photo.scale) + photo.offsetX
       const w = 0.5 + (b / headSpan) * (0.7 / photo.scale) + photo.offsetY
       uvOut.setXY(i, u, w)

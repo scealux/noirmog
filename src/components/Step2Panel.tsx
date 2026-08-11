@@ -9,6 +9,7 @@ import { trackPerformance } from '../lib/trackPerformance'
 import { PipelineError } from '../lib/runTask'
 import { useTaskStore } from '../state/taskStore'
 import { MAX_RECORD_SECONDS, openWebcam, type WebcamSession } from '../lib/webcamRecorder'
+import { SliderRow } from './SliderRow'
 
 // Dev-only shortcut to the test clips in the repo (served by Vite's /@fs/).
 const DEV_CLIPS = import.meta.env.DEV
@@ -236,24 +237,19 @@ export function Step2Panel() {
     min: number,
     max: number,
     step: number,
-    display: string,
+    _display: string,
     onChange: (v: number) => void,
     resetValue?: number,
   ) => (
-    <div className="slider-row">
-      <span className="slider-label">{label}</span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        onDoubleClick={resetValue !== undefined ? () => onChange(resetValue) : undefined}
-        title={resetValue !== undefined ? 'Double-click to reset' : undefined}
-      />
-      <span className="slider-value">{display}</span>
-    </div>
+    <SliderRow
+      label={label}
+      value={value}
+      min={min}
+      max={max}
+      step={step}
+      onChange={onChange}
+      resetValue={resetValue}
+    />
   )
 
   return (

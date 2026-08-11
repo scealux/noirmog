@@ -103,6 +103,17 @@ Baked-frames GLB stores JPEG frames in scene extras (measured: ~0.3MB per 1.5s @
       driving once a contract-compliant detailed mesh exists.
 - [ ] Tracked 3D eyeballs (needs iris landmarks 468-477 stored → small tracking change +
       eye bones), expanded facial-bone channels, animation curve editor
+- [x] Overnight round 2 (2026-08-11 early): DetailedHead2 (re-unwrapped) textures correctly
+      and is now a working preset; side-fill photos preview on the untracked head; bakes are
+      debounced + serialized + texture-cached (fixes the slider-drag freeze); tabbed per-slot
+      photo UI with rotation + mirror-fill only when a side is missing; shared SliderRow with
+      number box (wheel + steppers, ±0.02); key-point color legend with placement hints;
+      guided-capture countdown aborts if the pose is lost; resizable side panel (persisted);
+      jaw-width morph no longer stretches the neck; session persistence — settings in
+      localStorage, reference photos in IndexedDB (performance video NOT persisted by design).
+- [ ] Eye reference capture (Alex's idea, agreed): wide-eyes still photo sampled as eye
+      texture for the detailed model so eyes don't stretch when animated — pair with the
+      v3 eyeball work once eye-mesh UVs are settled.
 
 ## Decisions & Deviations
 - 2026-08-10: Dev machine had no system Node; using existing user-local install at

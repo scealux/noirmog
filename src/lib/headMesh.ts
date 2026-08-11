@@ -333,9 +333,16 @@ async function loadAndPrepare(url: string): Promise<PreparedHead> {
 
       // Face width: lateral scale of the head region.
       x *= 1 + (morph.faceWidth - 1) * headW
-      // Jaw width: extra lateral scale below the mouth line, strongest at the chin.
-      const jawW = THREE.MathUtils.smoothstep(mouthY - y, 0, mouthY - chinY) * headW
-      x *= 1 + (morph.jawWidth - 1) * jawW
+      // Jaw width: extra lateral scale below the mouth line, strongest at the
+      // chin, fading OUT again below it so the neck keeps its shape.
+      const spanLipChin = Math.max(1e-4, mouthY - chinY)
+      const jawDown = THREE.MathUtils.smoothstep(mouthY - y, 0, spanLipChin)
+      const jawCut = THREE.MathUtils.smoothstep(
+        y - (chinY - spanLipChin * 0.9),
+        0,
+        spanLipChin * 0.55,
+      )
+      x *= 1 + (morph.jawWidth - 1) * jawDown * jawCut * headW
       // Face length: vertical stretch of the head region about the nose line.
       y = noseY + (y - noseY) * (1 + (morph.faceLength - 1) * headW)
       // Head depth: front/back scale of the head region.

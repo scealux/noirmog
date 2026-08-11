@@ -144,6 +144,30 @@ for the full spec.
   `canonical_face_model.obj` (Apache-2.0) via `tools/bake-canonical-face.mjs` into
   `src/data/canonicalFace.json`. Vertex order matches landmark indices.
 
+## Roadmap decisions (2026-08-10 design session with Alex)
+- **Aesthetic north star: max realism within the low-poly limits** — chase realism where
+  cheap (real eyes, soft shading), accept the mesh's character. Not chasing MetaHuman.
+- **MetaHuman ruled out** — Epic licensing restricts assets to Unreal projects; also wrong
+  topology/rig for this pipeline.
+- **Mouth: pocket approach** — closed surface with shallow interior scoop + inner-lip shape
+  key; no topological hole (keeps the filmed teeth/tongue). Alex authors in Blender.
+- **Base mesh next pass (Alex, Blender): selective density** — extra loops around mouth +
+  eyes only; mouth pocket; ~8 shape keys NAMED after MediaPipe blendshapes (browInnerUp,
+  browDownLeft/Right, eyeBlinkLeft/Right, mouthSmileLeft/Right, cheekPuff) — the app will
+  auto-bind same-named morph targets to blendshape channels.
+- **v2 headline: side-fill FIRST, then shape-key binding.** Side-fill = static reference
+  photos (upload AND guided webcam capture) projected + baked into a static base texture
+  under the live face video, with symmetry mirror fill as fallback; color matching =
+  auto-normalize toward the video's sampled skin tone + manual exposure/tint trim.
+  Build the texture compositor as N-source blending — it is the same machinery the
+  multi-cam rig needs later.
+- **v3: tracked 3D eyeballs** (MediaPipe iris gaze, separate eye meshes; needs sockets on
+  the mesh) + small base-head preset set (2-4 heads sharing the UV/bone/shape-key contract).
+- **Head-turn frame harvesting for side texture: not planned** (photos chosen instead).
+- **v5: 3-camera rig** — record all three live in-app (simultaneous getUserMedia; accept a
+  720p cap if USB bandwidth forces it), per-camera warp weighted by surface-normal angle,
+  feathered N-source blend. Two high-side cams + one low center cam aimed at the mouth.
+
 ## Deferred
 ### v2
 - Simple de-lighting (color normalization) — will be an inserted stage in the texture pipeline

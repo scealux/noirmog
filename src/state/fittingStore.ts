@@ -5,6 +5,7 @@ import {
 } from '../lib/headMesh'
 import { canonicalVertex } from '../lib/canonicalFace'
 import type { PhotoSlot, SlotPhotos } from '../lib/projectionBaker'
+import { setActiveHeadModel, type HeadModelId } from '../lib/headMesh'
 
 export const DEFAULT_SLOT_PHOTO = { scale: 1, offsetX: 0, offsetY: 0, exposure: 1 }
 
@@ -38,6 +39,9 @@ interface FittingState {
   /** Bumped whenever the head geometry changes so dependents re-fit. */
   morphVersion: number
 
+  headModel: HeadModelId
+  setHeadModel: (id: HeadModelId) => void
+
   /** Side/back reference photos for the baked base texture. */
   slotPhotos: SlotPhotos
   mirrorFill: boolean
@@ -64,6 +68,11 @@ export const useFittingStore = create<FittingState>((set) => ({
   keyPoints: {},
   morph: { ...DEFAULT_HEAD_MORPH },
   morphVersion: 0,
+  headModel: 'classic',
+  setHeadModel: (id) => {
+    setActiveHeadModel(id)
+    set({ headModel: id })
+  },
   slotPhotos: {},
   mirrorFill: true,
   bakeVersion: 0,

@@ -16,7 +16,8 @@ const NEUTRAL_SKIN = new THREE.Color('#9a8578')
  * and channel-driven bones (neck/head rotation + jaw) synced to the video.
  */
 export function HeadBust() {
-  const head = use(prepareHead())
+  const headModel = useFittingStore((s) => s.headModel)
+  const head = use(prepareHead(headModel))
   const tracking = usePerformanceStore((s) => s.tracking)
   const faceFit = usePerformanceStore((s) => s.faceFit)
   const gl = useThree((s) => s.gl)

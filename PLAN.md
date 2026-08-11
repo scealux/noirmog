@@ -76,9 +76,33 @@ for the full spec.
       (3) stabilized UV texture MP4 alone, (4) rendered MP4 of the bust via MediaRecorder
 - [ ] Verify GLB+MP4 in bundled viewer; rendered MP4 matches preview
 
-### Phase 5 — Polish Pass
-- [ ] Settings menu final pass, error-message quality, empty/loading states
-- [ ] README with usage + Blender glTF→FBX conversion note
+### Phase 4 — status: COMPLETE (2026-08-10)
+All four exports implemented with progress reporting; blend color override in Step 3.
+Deviation: browser-encodable video is WebM (VP9/Opus), not MP4 — documented in README.
+Baked-frames GLB stores JPEG frames in scene extras (measured: ~0.3MB per 1.5s @15fps/512px).
+
+### Phase 5 — Polish Pass — status: COMPLETE (2026-08-10)
+- [x] README with usage + Blender glTF→FBX conversion note; dead placeholder cleanup;
+      themed sliders; double-click-to-reset on all sliders
+
+### v2 (shipped 2026-08-10, verify in morning testing)
+- [x] Side-fill: ProjectionBaker N-source compositor (left/right/back/top photos onto UV
+      layout, view-facing vertex alpha, over skin tone, behind feathered live video);
+      mirror-fill; auto color-match softened to 50% + per-photo zoom/shift/exposure trims
+- [x] Guided webcam capture (front/left/right pose-verified via live yaw + chime + 3-2-1
+      countdown; back on a timer); front capture feeds landmark fitting
+- [ ] Not done from v2 list: keyframe correction UI, live tracking overlay while recording,
+      stabilization quality modes, video de-lighting (photo color-match only)
+
+### v3 (partial, 2026-08-10)
+- [x] Head preset system: classic + DetailedHead (experimental). Flexible bone lookup
+      (Jaw/Jaw_D), largest-skinned-mesh selection, scale/placement normalization to shared
+      bust framing. IMPORTANT finding: DetailedHead's UV atlas fragments the face across
+      islands, so the video texture does not display on it — the MESH CONTRACT requires a
+      contiguous face UV island (like the classic head). Its 67 facial bones + eyes await
+      driving once a contract-compliant detailed mesh exists.
+- [ ] Tracked 3D eyeballs (needs iris landmarks 468-477 stored → small tracking change +
+      eye bones), expanded facial-bone channels, animation curve editor
 
 ## Decisions & Deviations
 - 2026-08-10: Dev machine had no system Node; using existing user-local install at

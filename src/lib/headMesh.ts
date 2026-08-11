@@ -201,14 +201,36 @@ function makeSurfaceUVLookup(
   }
 }
 
-let cached: Promise<PreparedHead> | null = null
+/** Selectable base heads. All must share the bone contract (see findBone). */
+export const HEAD_MODELS = [
+  { id: 'classic', label: 'Classic (low-poly)', file: 'models/head.glb' },
+  { id: 'detailed', label: 'Detailed (eyes + mouth pocket)', file: 'models/head-detailed.glb' },
+] as const
 
-export function prepareHead(url = `${import.meta.env.BASE_URL}models/head.glb`): Promise<PreparedHead> {
-  cached ??= loadAndPrepare(url).catch((err) => {
-    cached = null
-    throw err
-  })
-  return cached
+export type HeadModelId = (typeof HEAD_MODELS)[number]['id']
+
+let activeHeadId: HeadModelId = 'classic'
+export function setActiveHeadModel(id: HeadModelId): void {
+  activeHeadId = id
+}
+export function getActiveHeadModel(): HeadModelId {
+  return activeHeadId
+}
+
+const cache = new Map<string, Promise<PreparedHead>>()
+
+export function prepareHead(id?: HeadModelId): Promise<PreparedHead> {
+  const model = HEAD_MODELS.find((m) => m.id === (id ?? activeHeadId)) ?? HEAD_MODELS[0]
+  const url = import.meta.env.BASE_URL + model.file
+  let entry = cache.get(url)
+  if (!entry) {
+    entry = loadAndPrepare(url).catch((err) => {
+      cache.delete(url)
+      throw err
+    })
+    cache.set(url, entry)
+  }
+  return entry
 }
 
 async function loadAndPrepare(url: string): Promise<PreparedHead> {
@@ -216,9 +238,17 @@ async function loadAndPrepare(url: string): Promise<PreparedHead> {
   let skinnedMesh: THREE.SkinnedMesh | null = null
   const bones = new Map<string, THREE.Bone>()
   gltf.scene.traverse((obj) => {
-    if (!skinnedMesh && obj instanceof THREE.SkinnedMesh) skinnedMesh = obj
+    if (obj instanceof THREE.SkinnedMesh) {
+      // The face mesh = the biggest skinned mesh (extra meshes are eyes/teeth).
+      const count = (obj.geometry as THREE.BufferGeometry).getAttribute('position').count
+      const best = skinnedMesh
+        ? (skinnedMesh.geometry as THREE.BufferGeometry).getAttribute('position').count
+        : -1
+      if (count > best) skinnedMesh = obj
+    }
     if (obj instanceof THREE.Bone) bones.set(obj.name, obj)
   })
+  const findBone = (...names: string[]) => names.map((n) => bones.get(n)).find(Boolean)
   if (!skinnedMesh) {
     throw new PipelineError(
       'No skinned mesh found in head GLB',
@@ -226,9 +256,9 @@ async function loadAndPrepare(url: string): Promise<PreparedHead> {
     )
   }
   skinnedMesh = skinnedMesh as THREE.SkinnedMesh
-  const neckBone = bones.get('Neck')
-  const headBone = bones.get('Head')
-  const jawBone = bones.get('Jaw')
+  const neckBone = findBone('Neck')
+  const headBone = findBone('Head')
+  const jawBone = findBone('Jaw', 'Jaw_D')
   if (!neckBone || !headBone || !jawBone) {
     throw new PipelineError(
       `Head GLB is missing bones (found: ${[...bones.keys()].join(', ') || 'none'})`,
@@ -320,6 +350,15 @@ async function loadAndPrepare(url: string): Promise<PreparedHead> {
     geometry.computeBoundingSphere()
     geometry.computeBoundingBox()
   }
+
+  // Normalize world placement so differently-scaled heads share one camera
+  // framing (geometry-space math above is unaffected).
+  const height = bounds.max.y - bounds.min.y
+  const TARGET_HEIGHT = 0.76
+  const s = height > 1e-4 ? TARGET_HEIGHT / height : 1
+  gltf.scene.scale.setScalar(s)
+  gltf.scene.position.y = -0.09 - bounds.min.y * s
+  gltf.scene.updateMatrixWorld(true)
 
   return { scene: gltf.scene, skinnedMesh, rig, geometry, mapToUV, applyMorph, bounds }
 }

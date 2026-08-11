@@ -10,6 +10,7 @@ import {
 } from '../state/fittingStore'
 import { GuidedCapture } from './GuidedCapture'
 import type { PhotoSlot } from '../lib/projectionBaker'
+import { HEAD_MODELS, type HeadModelId } from '../lib/headMesh'
 
 const SIDE_SLOTS: { slot: PhotoSlot; label: string }[] = [
   { slot: 'left', label: 'Left' },
@@ -239,8 +240,30 @@ export function Step1Panel() {
 
   const canvasAspect = frontPhoto ? frontPhoto.height / frontPhoto.width : 0.75
 
+  const headModel = useFittingStore((s) => s.headModel)
+  const setHeadModel = useFittingStore((s) => s.setHeadModel)
+
   return (
     <>
+      <div className="panel-section">
+        <h3>Base head</h3>
+        <div className="slider-row">
+          <span className="slider-label">Model</span>
+          <select
+            value={headModel}
+            onChange={(e) => setHeadModel(e.target.value as HeadModelId)}
+            style={{ flex: 1 }}
+          >
+            {HEAD_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p>The detailed head is experimental — its facial bones and eyes are not driven yet.</p>
+      </div>
+
       <div className="panel-section">
         <h3>Reference photo</h3>
         <input

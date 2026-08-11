@@ -27,8 +27,16 @@ function pickMimeType(): string {
   return candidates.find((t) => MediaRecorder.isTypeSupported(t)) ?? ''
 }
 
+/** Audio inputs available (call after camera permission has been granted). */
+export async function listMicrophones(): Promise<{ deviceId: string; label: string }[]> {
+  const devices = await navigator.mediaDevices.enumerateDevices()
+  return devices
+    .filter((d) => d.kind === 'audioinput')
+    .map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Microphone ${i + 1}` }))
+}
+
 /** Ask for the webcam+mic and return a session handle. Throws PipelineError with a hint. */
-export async function openWebcam(): Promise<WebcamSession> {
+export async function openWebcam(audioDeviceId?: string): Promise<WebcamSession> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new PipelineError(
       'Webcam capture is not available in this browser',
@@ -39,7 +47,7 @@ export async function openWebcam(): Promise<WebcamSession> {
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-      audio: true,
+      audio: audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true,
     })
   } catch (err) {
     const name = err instanceof DOMException ? err.name : ''

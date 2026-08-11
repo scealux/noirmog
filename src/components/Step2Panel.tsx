@@ -8,7 +8,7 @@ import {
 import { trackPerformance } from '../lib/trackPerformance'
 import { PipelineError } from '../lib/runTask'
 import { useTaskStore } from '../state/taskStore'
-import { MAX_RECORD_SECONDS, openWebcam, type WebcamSession } from '../lib/webcamRecorder'
+import { MAX_RECORD_SECONDS, listMicrophones, openWebcam, type WebcamSession } from '../lib/webcamRecorder'
 import { SliderRow } from './SliderRow'
 
 // Dev-only shortcut to the test clips in the repo (served by Vite's /@fs/).
@@ -57,6 +57,9 @@ export function Step2Panel() {
   const log = useTaskStore((s) => s.log)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [scrub, setScrub] = useState(0)
+  const [muted, setMuted] = useState(false)
+  const [mics, setMics] = useState<{ deviceId: string; label: string }[]>([])
+  const [micId, setMicId] = useState('')
 
   const [recState, setRecState] = useState<RecordingState>('idle')
   const [recSeconds, setRecSeconds] = useState(0)
@@ -66,6 +69,10 @@ export function Step2Panel() {
   // Follow the video element's real state, keep playback inside the trim range.
   useEffect(() => {
     const video = getPerformanceVideo()
+    // Re-sync after remount (step switching): events fired while unmounted are
+    // lost, and a stale `playing` flag makes the Play button pause a paused
+    // video — which reads as "playback is broken".
+    setPlaying(!video.paused)
     const onTime = () => {
       setScrub(video.currentTime)
       const { trimEnd: end, trimStart: start, loop: doLoop } = usePerformanceStore.getState()
@@ -149,15 +156,20 @@ export function Step2Panel() {
     e.target.value = ''
   }
 
-  const openCamera = async () => {
+  const openCamera = async (audioDeviceId?: string) => {
     try {
-      const session = await openWebcam()
+      sessionRef.current?.dispose()
+      const session = await openWebcam(audioDeviceId)
       sessionRef.current = session
       setRecState('preview')
       log('info', 'Capture', `Webcam opened (${session.audioTrackCount} audio track(s))`)
       if (session.audioTrackCount === 0) {
         log('warn', 'Capture', 'No microphone track — the recording will be silent. Check mic permissions.')
       }
+      const list = await listMicrophones().catch(() => [])
+      setMics(list)
+      const active = session.stream.getAudioTracks()[0]?.getSettings().deviceId
+      if (active) setMicId(active)
     } catch (err) {
       log('error', 'Capture', errorText(err))
     }
@@ -214,7 +226,7 @@ export function Step2Panel() {
       video.pause()
       return
     }
-    video.muted = false
+    video.muted = muted
     if (video.currentTime < trimStart || video.currentTime >= trimEnd - 0.05) {
       video.currentTime = trimStart
     }
@@ -307,7 +319,28 @@ export function Step2Panel() {
               )}
             </div>
             {recState === 'preview' && (
-              <p>Keep your head as still as possible, face evenly lit.</p>
+              <>
+                {mics.length > 1 && (
+                  <div className="slider-row" style={{ marginTop: 6 }}>
+                    <span className="slider-label">Mic</span>
+                    <select
+                      value={micId}
+                      style={{ flex: 1, minWidth: 0 }}
+                      onChange={(e) => {
+                        setMicId(e.target.value)
+                        void openCamera(e.target.value)
+                      }}
+                    >
+                      {mics.map((m) => (
+                        <option key={m.deviceId} value={m.deviceId}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <p>Keep your head as still as possible, face evenly lit.</p>
+              </>
             )}
           </div>
         )}
@@ -342,6 +375,17 @@ export function Step2Panel() {
               <label className="check-label">
                 <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
                 Loop
+              </label>
+              <label className="check-label">
+                <input
+                  type="checkbox"
+                  checked={muted}
+                  onChange={(e) => {
+                    setMuted(e.target.checked)
+                    getPerformanceVideo().muted = e.target.checked
+                  }}
+                />
+                Mute
               </label>
             </div>
             <input

@@ -114,6 +114,19 @@ Baked-frames GLB stores JPEG frames in scene extras (measured: ~0.3MB per 1.5s @
 - [ ] Eye reference capture (Alex's idea, agreed): wide-eyes still photo sampled as eye
       texture for the detailed model so eyes don't stretch when animated — pair with the
       v3 eyeball work once eye-mesh UVs are settled.
+- [x] Bug round (2026-08-11): left/right projection cameras were anatomically swapped
+      (subject faces +z → their LEFT is world +x); jaw-width morph z-gated + tighter chin
+      fade; fitting-photo canvas reloads its image after step switching (was a black
+      square); play/pause state re-syncs on Step 2 remount (stale flag made Play pause a
+      paused video); Mute checkbox + microphone selector in the recorder; blend/base color
+      moved to Step 1.
+- [x] Texture editor v0 (2026-08-11): live 2D view of the baked head texture in Step 1 with
+      direct manipulation of the active photo (drag = move, wheel = zoom, Shift+drag =
+      rotate), rendered by the same ProjectionBaker in canvas mode.
+- [ ] Projection editor suite (Alex's request, next big feature): Substance-style move
+      gizmos placing/rotating projected photos in the 3D viewport, warp projection
+      (control-point cage deforming a projection), and clone/smear/blend touch-up tools on
+      the UV editor. The 2D texture editor above is the seam these build on.
 
 ## Decisions & Deviations
 - 2026-08-10: Dev machine had no system Node; using existing user-local install at

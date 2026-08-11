@@ -12,6 +12,21 @@ import { GuidedCapture } from './GuidedCapture'
 import type { PhotoSlot } from '../lib/projectionBaker'
 import { HEAD_MODELS, type HeadModelId } from '../lib/headMesh'
 import { SliderRow } from './SliderRow'
+import { usePerformanceStore } from '../state/performanceStore'
+import { TextureEditor } from './TextureEditor'
+
+function rgbToHex([r, g, b]: [number, number, number]): string {
+  const h = (n: number) => Math.round(n).toString(16).padStart(2, '0')
+  return `#${h(r)}${h(g)}${h(b)}`
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ]
+}
 
 const SIDE_SLOTS: { slot: PhotoSlot; label: string }[] = [
   { slot: 'left', label: 'Left' },
@@ -78,7 +93,8 @@ export function Step1Panel() {
   const dragIndex = useRef<number | null>(null)
   const [detecting, setDetecting] = useState(false)
   const [guided, setGuided] = useState(false)
-  const [activeSlot, setActiveSlot] = useState<PhotoSlot>('left')
+  const activeSlot = useFittingStore((st) => st.activeSlot)
+  const setActiveSlot = useFittingStore((st) => st.setActiveSlot)
 
   // Apply the current morph to the head whenever it changes.
   useEffect(() => {
@@ -96,6 +112,28 @@ export function Step1Panel() {
       cancelled = true
     }
   }, [morph, bumpMorphVersion])
+
+  // The image element lives in a ref and dies with the component — reload it
+  // from the stored photo URL after remounting (step switching), or the
+  // canvas draws as a black square.
+  const [imgReady, setImgReady] = useState(0)
+  useEffect(() => {
+    if (!frontPhoto) {
+      imageRef.current = null
+      return
+    }
+    if (imageRef.current?.src === frontPhoto.url) return
+    let cancelled = false
+    void loadImage(frontPhoto.url).then((img) => {
+      if (!cancelled) {
+        imageRef.current = img
+        setImgReady((v) => v + 1)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [frontPhoto])
 
   // Redraw the photo + landmarks whenever anything changes.
   useEffect(() => {
@@ -122,7 +160,7 @@ export function Step1Panel() {
       ctx.strokeStyle = kp.color
       ctx.stroke()
     }
-  }, [frontPhoto, keyPoints])
+  }, [frontPhoto, keyPoints, imgReady])
 
   const detectOnPhoto = async (url: string, name: string) => {
     setDetecting(true)
@@ -236,6 +274,10 @@ export function Step1Panel() {
 
   const canvasAspect = frontPhoto ? frontPhoto.height / frontPhoto.width : 0.75
 
+  const skinColorOverride = usePerformanceStore((st) => st.skinColorOverride)
+  const setSkinColorOverride = usePerformanceStore((st) => st.setSkinColorOverride)
+  const trackedSkin = usePerformanceStore((st) => st.tracking?.skinColor)
+  const skinHex = rgbToHex(skinColorOverride ?? trackedSkin ?? [154, 133, 120])
   const headModel = useFittingStore((s) => s.headModel)
   const setHeadModel = useFittingStore((s) => s.setHeadModel)
 
@@ -337,6 +379,18 @@ export function Step1Panel() {
             e.target.value = ''
           }}
         />
+        <div className="button-row" style={{ marginBottom: 8 }}>
+          <span className="slider-label">Base color</span>
+          <input
+            type="color"
+            value={skinHex}
+            onChange={(e) => setSkinColorOverride(hexToRgb(e.target.value))}
+            title="Skin tone for areas no photo or video covers"
+          />
+          <button onClick={() => setSkinColorOverride(null)} disabled={!skinColorOverride}>
+            Auto
+          </button>
+        </div>
         <div className="slot-tabs">
           {SIDE_SLOTS.map(({ slot, label }) => (
             <button
@@ -405,6 +459,7 @@ export function Step1Panel() {
                 resetValue={def}
               />
             ))}
+            <TextureEditor />
             <p>Photos preview on the head immediately and sit behind the live face once tracked.</p>
           </>
         )}

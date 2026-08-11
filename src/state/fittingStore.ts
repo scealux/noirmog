@@ -46,6 +46,8 @@ interface FittingState {
   /** Side/back reference photos for the baked base texture. */
   slotPhotos: SlotPhotos
   mirrorFill: boolean
+  activeSlot: PhotoSlot
+  setActiveSlot: (slot: PhotoSlot) => void
   /** Bumped whenever the baked base texture must be regenerated. */
   bakeVersion: number
 
@@ -76,6 +78,8 @@ export const useFittingStore = create<FittingState>((set) => ({
   },
   slotPhotos: {},
   mirrorFill: true,
+  activeSlot: 'left',
+  setActiveSlot: (slot) => set({ activeSlot: slot }),
   bakeVersion: 0,
 
   setFrontPhoto: (photo) => {

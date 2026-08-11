@@ -18,14 +18,16 @@ export type SlotPhotos = Partial<Record<PhotoSlot, SlotPhoto>>
 
 /** Per-slot projection frame: camera direction and image axes in head space. */
 const SLOT_FRAMES: Record<PhotoSlot, { view: THREE.Vector3; uAxis: THREE.Vector3; vAxis: THREE.Vector3 }> = {
-  // view = direction from head toward the camera; weight = dot(normal, view)
+  // view = direction from head toward the camera; weight = dot(normal, view).
+  // The subject faces +z, so their anatomical LEFT is world +x: the "left"
+  // photo's camera sits at +x. (These were swapped once — verify with a beard.)
   left: {
-    view: new THREE.Vector3(-1, 0, 0),
+    view: new THREE.Vector3(1, 0, 0),
     uAxis: new THREE.Vector3(0, 0, -1),
     vAxis: new THREE.Vector3(0, 1, 0),
   },
   right: {
-    view: new THREE.Vector3(1, 0, 0),
+    view: new THREE.Vector3(-1, 0, 0),
     uAxis: new THREE.Vector3(0, 0, 1),
     vAxis: new THREE.Vector3(0, 1, 0),
   },
@@ -159,7 +161,18 @@ export class ProjectionBaker {
     mirrorFill: boolean,
   ): Promise<void> {
     // Serialize: overlapping bakes (slider drags) run one at a time.
-    this.queue = this.queue.then(() => this.bakeNow(renderer, photos, skinColor, mirrorFill))
+    this.queue = this.queue.then(() => this.bakeNow(renderer, photos, skinColor, mirrorFill, this.target))
+    return this.queue
+  }
+
+  /** Bake straight to a renderer's canvas (the 2D texture editor preview). */
+  bakeToCanvas(
+    renderer: THREE.WebGLRenderer,
+    photos: SlotPhotos,
+    skinColor: [number, number, number],
+    mirrorFill: boolean,
+  ): Promise<void> {
+    this.queue = this.queue.then(() => this.bakeNow(renderer, photos, skinColor, mirrorFill, null))
     return this.queue
   }
 
@@ -168,13 +181,14 @@ export class ProjectionBaker {
     photos: SlotPhotos,
     skinColor: [number, number, number],
     mirrorFill: boolean,
+    target: THREE.WebGLRenderTarget | null,
   ): Promise<void> {
     // Start from the flat skin tone.
     const prev = renderer.getRenderTarget()
     const prevClear = new THREE.Color()
     renderer.getClearColor(prevClear)
     const prevAlpha = renderer.getClearAlpha()
-    renderer.setRenderTarget(this.target)
+    renderer.setRenderTarget(target)
     renderer.setClearColor(
       new THREE.Color(skinColor[0] / 255, skinColor[1] / 255, skinColor[2] / 255).convertSRGBToLinear(),
       1,

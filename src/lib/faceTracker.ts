@@ -30,6 +30,29 @@ export function resetFaceLandmarker(): void {
   cached = null
 }
 
+let cachedImage: Promise<FaceLandmarker> | null = null
+
+/** Separate IMAGE-mode landmarker for still photos (Step 1 fitting). */
+export function getImageFaceLandmarker(): Promise<FaceLandmarker> {
+  cachedImage ??= createImage().catch((err) => {
+    cachedImage = null
+    throw err
+  })
+  return cachedImage
+}
+
+async function createImage(): Promise<FaceLandmarker> {
+  const fileset = await FilesetResolver.forVisionTasks(`${import.meta.env.BASE_URL}mediapipe/wasm`)
+  return FaceLandmarker.createFromOptions(fileset, {
+    baseOptions: {
+      modelAssetPath: `${import.meta.env.BASE_URL}mediapipe/face_landmarker.task`,
+      delegate: 'GPU',
+    },
+    runningMode: 'IMAGE',
+    numFaces: 1,
+  })
+}
+
 async function create(): Promise<FaceLandmarker> {
   const base = import.meta.env.BASE_URL
   let fileset

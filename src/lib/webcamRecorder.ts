@@ -5,6 +5,8 @@ export const MAX_RECORD_SECONDS = 120
 
 export interface WebcamSession {
   stream: MediaStream
+  /** Number of audio tracks captured — 0 means the clip will be silent. */
+  audioTrackCount: number
   /** Start recording; resolves with the finished clip when stop() is called. */
   start: () => void
   stop: () => Promise<{ blob: Blob; mimeType: string }>
@@ -14,11 +16,13 @@ export interface WebcamSession {
 }
 
 function pickMimeType(): string {
+  // WebM+Opus first: Chrome reports mp4 support but its mp4 muxer has dropped
+  // audio tracks in the wild. Safari has no webm and falls through to mp4.
   const candidates = [
-    'video/mp4', // Safari; also best seeking behavior where supported
     'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp8,opus',
     'video/webm',
+    'video/mp4',
   ]
   return candidates.find((t) => MediaRecorder.isTypeSupported(t)) ?? ''
 }
@@ -61,6 +65,7 @@ export async function openWebcam(): Promise<WebcamSession> {
 
   return {
     stream,
+    audioTrackCount: stream.getAudioTracks().length,
     isRecording: () => recorder?.state === 'recording',
     start: () => {
       const mimeType = pickMimeType()

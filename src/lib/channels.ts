@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { matrixForFrame, BLENDSHAPE_COUNT, type TrackingData } from './trackingData'
 import type { ChannelEditSettings } from '../state/performanceStore'
+import type { BoneHeadRig } from './headMesh'
 
 /**
  * Driver channel system: named float channels sampled per frame, applied to the
@@ -9,34 +10,28 @@ import type { ChannelEditSettings } from '../state/performanceStore'
  */
 export type ChannelValues = Record<string, number>
 
-export interface HeadRig {
-  /** Group whose origin sits at the neck pivot; rotation channels apply here. */
-  headGroup: THREE.Object3D
-  /** Mesh with morph target 0 = jawOpen. */
-  mesh: THREE.Mesh
-}
-
-export type ChannelApplier = (value: number, rig: HeadRig) => void
+export type ChannelApplier = (value: number, rig: BoneHeadRig) => void
 
 export const CHANNEL_APPLIERS: Record<string, ChannelApplier> = {
   headYaw: (v, rig) => {
-    rig.headGroup.rotation.y = v
+    rig.yaw = v
   },
   headPitch: (v, rig) => {
-    rig.headGroup.rotation.x = v
+    rig.pitch = v
   },
   headRoll: (v, rig) => {
-    rig.headGroup.rotation.z = v
+    rig.roll = v
   },
   jawOpen: (v, rig) => {
-    if (rig.mesh.morphTargetInfluences) rig.mesh.morphTargetInfluences[0] = v
+    rig.jawOpen = v
   },
 }
 
-export function applyChannels(values: ChannelValues, rig: HeadRig): void {
+export function applyChannels(values: ChannelValues, rig: BoneHeadRig): void {
   for (const [name, value] of Object.entries(values)) {
     CHANNEL_APPLIERS[name]?.(value, rig)
   }
+  rig.apply()
 }
 
 const m4 = new THREE.Matrix4()

@@ -11,19 +11,107 @@ export interface FaceFitSettings {
   offsetY: number
 }
 
+/** How much of the head rotation is carried by the neck bone (rest by the head). */
+const NECK_SHARE = 0.3
+const JAW_MAX_ANGLE = THREE.MathUtils.degToRad(22)
+
 /**
- * The head mesh prepared for the pipeline:
- * - geometry with a procedural "jawOpen" morph target (index 0)
+ * Drives the head's armature (Torso > Neck > Head > Jaw). Rotations are given
+ * in tracking (world) axes; the neck carries a share of the motion and the
+ * head bone lands on the exact tracked rotation, so the torso never moves.
+ */
+export class BoneHeadRig {
+  yaw = 0
+  pitch = 0
+  roll = 0
+  jawOpen = 0
+
+  private neck: THREE.Bone
+  private head: THREE.Bone
+  private jaw: THREE.Bone
+  private neckRest: THREE.Quaternion
+  private jawRest: THREE.Quaternion
+  private torsoWorld: THREE.Quaternion
+  private torsoWorldInv: THREE.Quaternion
+  private headWorldRest: THREE.Quaternion
+
+  private e = new THREE.Euler()
+  private qShare = new THREE.Quaternion()
+  private qFull = new THREE.Quaternion()
+  private qTmp = new THREE.Quaternion()
+  private qJaw = new THREE.Quaternion()
+  private xAxis = new THREE.Vector3(1, 0, 0)
+
+  constructor(neck: THREE.Bone, head: THREE.Bone, jaw: THREE.Bone, scene: THREE.Object3D) {
+    this.neck = neck
+    this.head = head
+    this.jaw = jaw
+    scene.updateMatrixWorld(true)
+    this.neckRest = neck.quaternion.clone()
+    this.jawRest = jaw.quaternion.clone()
+    this.torsoWorld = neck.parent!.getWorldQuaternion(new THREE.Quaternion())
+    this.torsoWorldInv = this.torsoWorld.clone().invert()
+    this.headWorldRest = head.getWorldQuaternion(new THREE.Quaternion())
+  }
+
+  apply(): void {
+    // Neck takes its share of the rotation, expressed in world axes.
+    this.e.set(this.pitch * NECK_SHARE, this.yaw * NECK_SHARE, this.roll * NECK_SHARE, 'YXZ')
+    this.qShare.setFromEuler(this.e)
+    this.neck.quaternion
+      .copy(this.torsoWorldInv)
+      .multiply(this.qShare)
+      .multiply(this.torsoWorld)
+      .multiply(this.neckRest)
+
+    // Head bone lands exactly on the full tracked rotation regardless of the
+    // neck's contribution: headWorld = R_full * headWorldRest.
+    this.e.set(this.pitch, this.yaw, this.roll, 'YXZ')
+    this.qFull.setFromEuler(this.e)
+    const neckWorldNow = this.qTmp.copy(this.torsoWorld).multiply(this.neck.quaternion)
+    this.head.quaternion
+      .copy(neckWorldNow)
+      .invert()
+      .multiply(this.qFull)
+      .multiply(this.headWorldRest)
+
+    this.qJaw.setFromAxisAngle(this.xAxis, this.jawOpen * JAW_MAX_ANGLE)
+    this.jaw.quaternion.copy(this.jawRest).multiply(this.qJaw)
+  }
+}
+
+/**
+ * The head prepared for the pipeline:
+ * - scene: the rigged head (skinned mesh + armature) to add to the viewport
+ * - rig: bone driver for head rotation + jaw
  * - mapToUV: computes, for each of the 468 landmarks, its fixed destination in
  *   the head's UV square under the given fit settings. Warping video frames to
  *   these fixed destinations is what stabilizes the texture AND lays it out in
  *   UV space in one step.
  */
+/** Coarse Step 1 morphs; 1 = the unmodified base head. */
+export interface HeadMorphSettings {
+  faceWidth: number
+  faceLength: number
+  jawWidth: number
+  headDepth: number
+}
+
+export const DEFAULT_HEAD_MORPH: HeadMorphSettings = {
+  faceWidth: 1,
+  faceLength: 1,
+  jawWidth: 1,
+  headDepth: 1,
+}
+
 export interface PreparedHead {
+  scene: THREE.Group
+  skinnedMesh: THREE.SkinnedMesh
+  rig: BoneHeadRig
   geometry: THREE.BufferGeometry
   mapToUV: (fit: FaceFitSettings) => Float32Array // 468 * 2, in UV space
-  /** Neck pivot in mesh space; rotate the head group around this point. */
-  pivot: THREE.Vector3
+  /** Re-deform the head from its base shape (non-destructive, call freely). */
+  applyMorph: (morph: HeadMorphSettings) => void
   bounds: THREE.Box3
 }
 
@@ -113,70 +201,6 @@ function makeSurfaceUVLookup(
   }
 }
 
-/** Landmark indices used to locate facial features in canonical space. */
-const CANON = {
-  eyeOuterL: 33,
-  eyeOuterR: 263,
-  upperLip: 13,
-  lowerLip: 14,
-  chin: 152,
-}
-
-/**
- * Build a procedural jawOpen morph target: vertices below the lip line rotate
- * down around a hinge axis at ear height, with a smooth falloff.
- */
-function buildJawMorph(geometry: THREE.BufferGeometry, fit: SimilarityFit): void {
-  const pos = geometry.getAttribute('position')
-  const delta = new Float32Array(pos.count * 3)
-
-  const toHead = (i: number) => {
-    const [x, y] = canonicalVertex(i)
-    return [fit.scale * x + fit.tx, fit.scale * y + fit.ty]
-  }
-  const [, mouthY] = toHead(CANON.upperLip)
-  const [, chinY] = toHead(CANON.chin)
-  const [, eyeY] = toHead(CANON.eyeOuterL)
-  const hingeY = (eyeY + mouthY) / 2
-
-  const bounds = new THREE.Box3().setFromBufferAttribute(pos as THREE.BufferAttribute)
-  const zMid = (bounds.min.z + bounds.max.z) / 2
-  const hingeZ = zMid
-
-  const lipChinSpan = Math.max(1e-4, mouthY - chinY)
-  // Fade the morph OUT below the chin so the neck and chest stay put.
-  const chinBottomY = chinY - lipChinSpan * 0.25
-  const neckY = chinY - lipChinSpan * 0.8
-  const frontZ = bounds.max.z * 0.3
-
-  const maxAngle = THREE.MathUtils.degToRad(14)
-  const v = new THREE.Vector3()
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos as THREE.BufferAttribute, i)
-    if (v.z < frontZ) continue // back of head / neck column stays put
-    // 1 at chin, 0 at lip line and above…
-    const tDown = THREE.MathUtils.smoothstep(mouthY - v.y, 0, lipChinSpan * 0.9)
-    // …and back to 0 below the chin (this is what keeps the neck/chest still).
-    const tCut = THREE.MathUtils.smoothstep(v.y - neckY, 0, chinBottomY - neckY)
-    const t = tDown * tCut
-    if (t <= 0) continue
-    const angle = maxAngle * t
-    const dy = v.y - hingeY
-    const dz = v.z - hingeZ
-    const cos = Math.cos(angle)
-    const sin = Math.sin(angle)
-    // Rotate around the x-axis through (hingeY, hingeZ): mouth drops down/back.
-    const ny = hingeY + dy * cos + dz * sin
-    const nz = hingeZ - dy * sin + dz * cos
-    delta[i * 3 + 1] = ny - v.y
-    delta[i * 3 + 2] = nz - v.z
-  }
-
-  const morph = new THREE.BufferAttribute(delta, 3)
-  geometry.morphAttributes.position = [morph]
-  ;(geometry as THREE.BufferGeometry & { morphTargetsRelative: boolean }).morphTargetsRelative = true
-}
-
 let cached: Promise<PreparedHead> | null = null
 
 export function prepareHead(url = `${import.meta.env.BASE_URL}models/head.glb`): Promise<PreparedHead> {
@@ -189,26 +213,47 @@ export function prepareHead(url = `${import.meta.env.BASE_URL}models/head.glb`):
 
 async function loadAndPrepare(url: string): Promise<PreparedHead> {
   const gltf = await new GLTFLoader().loadAsync(url)
-  let geometry: THREE.BufferGeometry | null = null
+  let skinnedMesh: THREE.SkinnedMesh | null = null
+  const bones = new Map<string, THREE.Bone>()
   gltf.scene.traverse((obj) => {
-    if (!geometry && obj instanceof THREE.Mesh) geometry = obj.geometry as THREE.BufferGeometry
+    if (!skinnedMesh && obj instanceof THREE.SkinnedMesh) skinnedMesh = obj
+    if (obj instanceof THREE.Bone) bones.set(obj.name, obj)
   })
-  if (!geometry) throw new PipelineError('No mesh found in head GLB', 'Check public/models/head.glb')
-  geometry = geometry as THREE.BufferGeometry
+  if (!skinnedMesh) {
+    throw new PipelineError(
+      'No skinned mesh found in head GLB',
+      'The head model must be rigged (Torso/Neck/Head/Jaw bones). Check public/models/head.glb',
+    )
+  }
+  skinnedMesh = skinnedMesh as THREE.SkinnedMesh
+  const neckBone = bones.get('Neck')
+  const headBone = bones.get('Head')
+  const jawBone = bones.get('Jaw')
+  if (!neckBone || !headBone || !jawBone) {
+    throw new PipelineError(
+      `Head GLB is missing bones (found: ${[...bones.keys()].join(', ') || 'none'})`,
+      'Expected bones named Neck, Head and Jaw.',
+    )
+  }
+  skinnedMesh.frustumCulled = false
+  const geometry = skinnedMesh.geometry as THREE.BufferGeometry
   if (!geometry.getAttribute('uv')) throw new PipelineError('Head mesh has no UVs')
+  const rig = new BoneHeadRig(neckBone, headBone, jawBone, gltf.scene)
 
-  const pos = geometry.getAttribute('position')
-  const fit = fitCanonicalToHead(pos.array as ArrayLike<number>, pos.count)
+  const pos = geometry.getAttribute('position') as THREE.BufferAttribute
+  const basePositions = new Float32Array(pos.array as Float32Array)
   const surfaceUV = makeSurfaceUVLookup(geometry)
-  const headAnchors = findFaceAnchors(pos.array as ArrayLike<number>, pos.count)
-  const centerX = headAnchors.nose[0]
-  const centerY = headAnchors.nose[1]
 
   // Fixed UV destination for every landmark: canonical -> head space (with the
   // user's fit scale/offset applied around the nose) -> raycast onto the head
-  // surface -> authored UV at the hit point. Landmarks scaled past the head's
-  // silhouette are pulled back toward the face center until they hit.
+  // surface -> authored UV at the hit point. Anchors and the canonical fit are
+  // recomputed on every call so morphing the head geometry re-fits the face.
+  // Landmarks scaled past the silhouette are pulled back toward the center.
   const mapToUV = (userFit: FaceFitSettings): Float32Array => {
+    const fit = fitCanonicalToHead(pos.array as ArrayLike<number>, pos.count)
+    const headAnchors = findFaceAnchors(pos.array as ArrayLike<number>, pos.count)
+    const centerX = headAnchors.nose[0]
+    const centerY = headAnchors.nose[1]
     const landmarkUV = new Float32Array(CANONICAL_VERTEX_COUNT * 2)
     for (let i = 0; i < CANONICAL_VERTEX_COUNT; i++) {
       const [cx, cy] = canonicalVertex(i)
@@ -235,10 +280,46 @@ async function loadAndPrepare(url: string): Promise<PreparedHead> {
     return landmarkUV
   }
 
-  buildJawMorph(geometry, fit)
+  const bounds = new THREE.Box3().setFromBufferAttribute(pos)
 
-  const bounds = new THREE.Box3().setFromBufferAttribute(pos as THREE.BufferAttribute)
-  const pivot = new THREE.Vector3(0, bounds.min.y + (bounds.max.y - bounds.min.y) * 0.25, 0)
+  // Non-destructive morph: always recomputed from the pristine base positions.
+  const applyMorph = (morph: HeadMorphSettings): void => {
+    const out = pos.array as Float32Array
+    const base = findFaceAnchors(basePositions, pos.count)
+    const noseY = base.nose[1]
+    const chinY = base.chin[1]
+    const mouthY = chinY + (noseY - chinY) * 0.35
+    const faceSpan = Math.max(1e-4, noseY - chinY)
+    // Below this line the mesh is neck/torso and must not stretch.
+    const neckLineY = chinY - faceSpan * 0.6
+    const zCenter = (bounds.min.z + bounds.max.z) / 2
 
-  return { geometry, mapToUV, pivot, bounds }
+    for (let i = 0; i < pos.count; i++) {
+      let x = basePositions[i * 3]
+      let y = basePositions[i * 3 + 1]
+      let z = basePositions[i * 3 + 2]
+      // Head-region weight: 1 above the neck line, fading to 0 at it.
+      const headW = THREE.MathUtils.smoothstep(y - neckLineY, 0, faceSpan * 0.4)
+
+      // Face width: lateral scale of the head region.
+      x *= 1 + (morph.faceWidth - 1) * headW
+      // Jaw width: extra lateral scale below the mouth line, strongest at the chin.
+      const jawW = THREE.MathUtils.smoothstep(mouthY - y, 0, mouthY - chinY) * headW
+      x *= 1 + (morph.jawWidth - 1) * jawW
+      // Face length: vertical stretch of the head region about the nose line.
+      y = noseY + (y - noseY) * (1 + (morph.faceLength - 1) * headW)
+      // Head depth: front/back scale of the head region.
+      z = zCenter + (z - zCenter) * (1 + (morph.headDepth - 1) * headW)
+
+      out[i * 3] = x
+      out[i * 3 + 1] = y
+      out[i * 3 + 2] = z
+    }
+    pos.needsUpdate = true
+    geometry.computeVertexNormals()
+    geometry.computeBoundingSphere()
+    geometry.computeBoundingBox()
+  }
+
+  return { scene: gltf.scene, skinnedMesh, rig, geometry, mapToUV, applyMorph, bounds }
 }

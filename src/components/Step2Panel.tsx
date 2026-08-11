@@ -153,7 +153,10 @@ export function Step2Panel() {
       const session = await openWebcam()
       sessionRef.current = session
       setRecState('preview')
-      log('info', 'Capture', 'Webcam opened')
+      log('info', 'Capture', `Webcam opened (${session.audioTrackCount} audio track(s))`)
+      if (session.audioTrackCount === 0) {
+        log('warn', 'Capture', 'No microphone track — the recording will be silent. Check mic permissions.')
+      }
     } catch (err) {
       log('error', 'Capture', errorText(err))
     }

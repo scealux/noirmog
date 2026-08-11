@@ -6,12 +6,13 @@ import { FaceTextureWarper } from '../lib/faceWarper'
 import { ChannelSampler, applyChannels, type ChannelValues } from '../lib/channels'
 import { frameForTime, landmarksForFrame } from '../lib/trackingData'
 import { getPerformanceVideo, usePerformanceStore } from '../state/performanceStore'
+import { useFittingStore } from '../state/fittingStore'
 
 const NEUTRAL_SKIN = new THREE.Color('#9a8578')
 
 /**
- * The animated bust: prepared head mesh, video-texture warp target as its map,
- * and channel-driven motion (head rotation + jawOpen) synced to the video.
+ * The animated bust: rigged head mesh, video-texture warp target as its map,
+ * and channel-driven bones (neck/head rotation + jaw) synced to the video.
  */
 export function HeadBust() {
   const head = use(prepareHead())
@@ -19,8 +20,6 @@ export function HeadBust() {
   const faceFit = usePerformanceStore((s) => s.faceFit)
   const gl = useThree((s) => s.gl)
 
-  const groupRef = useRef<THREE.Group>(null)
-  const meshRef = useRef<THREE.Mesh>(null)
   const channelsRef = useRef<ChannelValues>({})
 
   const material = useMemo(
@@ -33,9 +32,18 @@ export function HeadBust() {
     [],
   )
 
+  // The skinned mesh renders with our material (video texture once tracked).
+  useEffect(() => {
+    head.skinnedMesh.material = material
+  }, [head, material])
+
+  // morphVersion re-fits the face texture after Step 1 morphs the head.
+  const morphVersion = useFittingStore((s) => s.morphVersion)
   const landmarkUV = useMemo(
     () => head.mapToUV({ scale: faceFit.scale, offsetY: faceFit.offsetY }),
-    [head, faceFit.scale, faceFit.offsetY],
+    // morphVersion is an external mutation signal for the head geometry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [head, faceFit.scale, faceFit.offsetY, morphVersion],
   )
 
   const warper = useMemo(() => {
@@ -71,30 +79,16 @@ export function HeadBust() {
     return () => warper?.dispose()
   }, [warper, material])
 
-  // Three only initializes morphTargetInfluences from geometry at construction.
-  useEffect(() => {
-    meshRef.current?.updateMorphTargets()
-  }, [head])
-
   useFrame(() => {
-    if (!tracking || !warper || !sampler || !groupRef.current || !meshRef.current) return
+    if (!tracking || !warper || !sampler) return
     const video = getPerformanceVideo()
     const frame = frameForTime(tracking, video.currentTime)
     warper.update(landmarksForFrame(tracking, frame))
     warper.render(gl)
     const settings = usePerformanceStore.getState().channelSettings
     const values = sampler.sample(frame, settings, channelsRef.current)
-    applyChannels(values, { headGroup: groupRef.current, mesh: meshRef.current })
+    applyChannels(values, head.rig)
   })
 
-  return (
-    <group ref={groupRef} position={head.pivot}>
-      <mesh
-        ref={meshRef}
-        geometry={head.geometry}
-        material={material}
-        position={head.pivot.clone().negate()}
-      />
-    </group>
-  )
+  return <primitive object={head.scene} />
 }

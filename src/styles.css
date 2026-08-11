@@ -321,6 +321,15 @@ button:focus-visible {
   color: var(--text-2);
 }
 
+.fitting-canvas {
+  width: 100%;
+  margin-top: 8px;
+  border-radius: 6px;
+  background: #000;
+  cursor: crosshair;
+  touch-action: none;
+}
+
 .recorder-preview {
   width: 100%;
   border-radius: 6px;

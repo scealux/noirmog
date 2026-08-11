@@ -57,9 +57,16 @@ for the full spec.
       smoothing — a first slice of v3's "animation curve editing")
 
 ### Phase 3 — Base Mesh Fitting (Step 1)
-- [ ] Front + side photo upload (both optional), auto landmarks → draggable points + coarse sliders
-- [ ] Morph generic head; no photos → default head passes through
-- [ ] Verify morphed head works through Phase 2 pipeline
+- [x] Front photo upload (optional), auto landmark detection (IMAGE-mode landmarker) →
+      6 draggable measurement points on the photo + coarse morph sliders (face width,
+      face length, jaw width, head depth). Dragging points re-derives the morph from
+      proportion ratios vs the canonical face.
+- [x] Morphs deform the rigged head non-destructively (recomputed from base positions);
+      no photo → default head passes through (all sliders 100%)
+- [x] Verify morphed head works through the Phase 2 pipeline: mapToUV recomputes anchors +
+      raycasts against the morphed geometry, so an already-tracked performance re-fits live
+- [ ] Side photo auto-measure (head depth) — deferred; the Head depth slider is manual for
+      now, side-photo landmarking on profile shots is unreliable in MediaPipe
 
 ### Phase 4 — Edit & Export (Step 3)
 - [x] Trim/cut performance range (landed early in Phase 2, lives in Step 2 panel — decide in
@@ -117,6 +124,16 @@ for the full spec.
   instead of a hard error).
 - 2026-08-10: Jaw morph now fades out below the chin (was dragging the whole neck/chest).
 - 2026-08-10: Trim's permanent home is Step 2; Step 3 = blend color + export only (user call).
+- 2026-08-10: Head is now a user-authored RIGGED mesh (FaceWArmiture.glb → head.glb):
+  Torso > Neck > Head > Jaw bones. Head pose splits 30% neck / 70% head (head bone lands on
+  the exact tracked rotation), torso never moves — replaces the old whole-bust pivot
+  rotation that read as excessive bobbing. Jaw bone (local-X hinge, 22° max) replaces the
+  procedural jaw morph.
+- 2026-08-10: Webcam recording mime preference is webm+opus first — Chrome advertises mp4
+  support but its mp4 muxer has shipped without audio; Safari falls through to mp4. Audio
+  track count is logged at record time.
+- 2026-08-10: Step 1 morphs mutate the skinned geometry's bind pose; bones stay fixed, which
+  is fine for coarse fitting. mapToUV recomputes anchors per call so morphs re-fit free.
 
 ## Assets & Sources
 - Base head mesh: user-authored low-poly head ("Noirmog Head UV Ref/", CC: project-own).

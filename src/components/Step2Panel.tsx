@@ -10,6 +10,7 @@ import { PipelineError } from '../lib/runTask'
 import { useTaskStore } from '../state/taskStore'
 import { MAX_RECORD_SECONDS, listMicrophones, openWebcam, type WebcamSession } from '../lib/webcamRecorder'
 import { SliderRow } from './SliderRow'
+import { useFittingStore } from '../state/fittingStore'
 
 // Dev-only shortcut to the test clips in the repo (served by Vite's /@fs/).
 const DEV_CLIPS = import.meta.env.DEV
@@ -55,6 +56,8 @@ export function Step2Panel() {
     setFaceFit,
   } = usePerformanceStore()
   const log = useTaskStore((s) => s.log)
+  const gizmoMode = useFittingStore((s) => s.gizmoMode)
+  const setGizmoMode = useFittingStore((s) => s.setGizmoMode)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [scrub, setScrub] = useState(0)
   const [muted, setMuted] = useState(false)
@@ -420,6 +423,18 @@ export function Step2Panel() {
 
           <div className="panel-section">
             <h3>Face Fit & Blend</h3>
+            <div className="button-row" style={{ marginBottom: 6 }}>
+              <span className="slider-label">Gizmo</span>
+              {(['translate', 'scale'] as const).map((m) => (
+                <button
+                  key={m}
+                  className={gizmoMode === m ? 'slot-filled' : ''}
+                  onClick={() => setGizmoMode(gizmoMode === m ? null : m)}
+                >
+                  {m === 'translate' ? 'Move' : 'Scale'}
+                </button>
+              ))}
+            </div>
             {sliderRow(
               'Face size',
               faceFit.scale,
@@ -429,6 +444,16 @@ export function Step2Panel() {
               `${Math.round(faceFit.scale * 100)}%`,
               (v) => setFaceFit('scale', v),
               DEFAULT_FACE_FIT.scale,
+            )}
+            {sliderRow(
+              'Shift X',
+              faceFit.offsetX,
+              -0.04,
+              0.04,
+              0.001,
+              `${(faceFit.offsetX * 100).toFixed(1)}cm`,
+              (v) => setFaceFit('offsetX', v),
+              DEFAULT_FACE_FIT.offsetX,
             )}
             {sliderRow(
               'Height',

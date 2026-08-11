@@ -123,10 +123,17 @@ Baked-frames GLB stores JPEG frames in scene extras (measured: ~0.3MB per 1.5s @
 - [x] Texture editor v0 (2026-08-11): live 2D view of the baked head texture in Step 1 with
       direct manipulation of the active photo (drag = move, wheel = zoom, Shift+drag =
       rotate), rendered by the same ProjectionBaker in canvas mode.
-- [ ] Projection editor suite (Alex's request, next big feature): Substance-style move
-      gizmos placing/rotating projected photos in the 3D viewport, warp projection
-      (control-point cage deforming a projection), and clone/smear/blend touch-up tools on
-      the UV editor. The 2D texture editor above is the seam these build on.
+- [x] Projection gizmos v1 (2026-08-11): Substance-style translucent projector plane for
+      the active photo in the 3D viewport with Move/Rotate/Scale TransformControls writing
+      back to bake parameters; a Move/Scale gizmo on Step 2 manipulates the front video
+      mapping (face-fit gained offsetX end-to-end). Per-photo EDGE FEATHER slider (widens
+      the view-facing alpha ramp), FLIP HORIZONTAL (selfie cameras mirror — likely the
+      residual "wrong side" confusion), and REMOVE BACKGROUND via MediaPipe selfie
+      segmentation (vendored model, cached soft-mask canvases) so profile-photo backgrounds
+      don't overlap-paint the head.
+- [ ] Projection editor, remaining: warp projection (control-point cage), clone/smear/blend
+      touch-up tools on the UV editor; gizmo drag-feel needs real-mouse testing (signs may
+      want flipping).
 
 ## Decisions & Deviations
 - 2026-08-10: Dev machine had no system Node; using existing user-local install at

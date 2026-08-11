@@ -12,12 +12,18 @@ export interface SlotPhoto {
   exposure: number
   /** Rotation of the photo in degrees. */
   rotation: number
+  /** Edge feather: 0 = hard directional cutoff, 1 = very soft wrap. */
+  feather: number
+  /** Mirror the photo horizontally (selfie cameras mirror!). */
+  flipH: boolean
+  /** Alpha-out the photo background via person segmentation. */
+  removeBg: boolean
 }
 
 export type SlotPhotos = Partial<Record<PhotoSlot, SlotPhoto>>
 
 /** Per-slot projection frame: camera direction and image axes in head space. */
-const SLOT_FRAMES: Record<PhotoSlot, { view: THREE.Vector3; uAxis: THREE.Vector3; vAxis: THREE.Vector3 }> = {
+export const SLOT_FRAMES: Record<PhotoSlot, { view: THREE.Vector3; uAxis: THREE.Vector3; vAxis: THREE.Vector3 }> = {
   // view = direction from head toward the camera; weight = dot(normal, view).
   // The subject faces +z, so their anatomical LEFT is world +x: the "left"
   // photo's camera sits at +x. (These were swapped once — verify with a beard.)
@@ -45,19 +51,53 @@ const SLOT_FRAMES: Record<PhotoSlot, { view: THREE.Vector3; uAxis: THREE.Vector3
 
 const BAKE_SIZE = 1024
 
-const textureCache = new Map<string, Promise<{ tex: THREE.Texture; avg: [number, number, number] }>>()
+const textureCache = new Map<string, Promise<{ tex: THREE.Texture; avg: [number, number, number]; aspect: number }>>()
 
-function loadTextureCached(url: string): Promise<{ tex: THREE.Texture; avg: [number, number, number] }> {
-  let entry = textureCache.get(url)
+function loadTextureCached(
+  url: string,
+  removeBg: boolean,
+): Promise<{ tex: THREE.Texture; avg: [number, number, number]; aspect: number }> {
+  const key = removeBg ? url + '#nobg' : url
+  let entry = textureCache.get(key)
   if (!entry) {
-    entry = new THREE.TextureLoader().loadAsync(url).then((tex) => {
+    entry = (async () => {
+      if (removeBg) {
+        const { removeBackground } = await import('./backgroundRemoval')
+        const canvas = await removeBackground(url)
+        const tex = new THREE.CanvasTexture(canvas)
+        tex.colorSpace = THREE.SRGBColorSpace
+        return {
+          tex,
+          avg: averageColorFromCanvas(canvas),
+          aspect: canvas.width / canvas.height,
+        }
+      }
+      const tex = await new THREE.TextureLoader().loadAsync(url)
       tex.colorSpace = THREE.SRGBColorSpace
-      return { tex, avg: averageColor(tex.image as HTMLImageElement) }
-    })
-    entry.catch(() => textureCache.delete(url))
-    textureCache.set(url, entry)
+      const img = tex.image as HTMLImageElement
+      return { tex, avg: averageColor(img), aspect: img.naturalWidth / img.naturalHeight }
+    })()
+    entry.catch(() => textureCache.delete(key))
+    textureCache.set(key, entry)
   }
   return entry
+}
+
+/** Average of non-transparent pixels in a (possibly masked) canvas. */
+function averageColorFromCanvas(source: HTMLCanvasElement): [number, number, number] {
+  const c = document.createElement('canvas')
+  c.width = 32
+  c.height = 32
+  const ctx = c.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return [128, 128, 128]
+  ctx.drawImage(source, 0, 0, 32, 32)
+  const data = ctx.getImageData(0, 0, 32, 32).data
+  let r = 0, g = 0, b = 0, n = 0
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 64) continue
+    r += data[i]; g += data[i + 1]; b += data[i + 2]; n++
+  }
+  return n ? [r / n, g / n, b / n] : [128, 128, 128]
 }
 
 /** Average color of the central region of a photo (for auto color-matching). */
@@ -207,7 +247,7 @@ export class ProjectionBaker {
     }
 
     for (const pass of passes) {
-      const { tex, avg } = await loadTextureCached(pass.photo.url)
+      const { tex, avg, aspect } = await loadTextureCached(pass.photo.url, pass.photo.removeBg)
       // Auto color-match HALFWAY toward the video's sampled skin tone (a full
       // match bleaches hair to skin color when the photo is mostly hair),
       // then apply the user's exposure trim.
@@ -217,7 +257,7 @@ export class ProjectionBaker {
         soften(skinColor[1] / Math.max(1, avg[1])) * pass.photo.exposure,
         soften(skinColor[2] / Math.max(1, avg[2])) * pass.photo.exposure,
       ]
-      this.preparePass(pass.slot, pass.photo, pass.mirrored, tex.image as HTMLImageElement)
+      this.preparePass(pass.slot, pass.photo, pass.mirrored, aspect)
       this.material.map = tex
       this.material.color.setRGB(gain[0], gain[1], gain[2])
       renderer.render(this.scene, this.camera)
@@ -228,12 +268,7 @@ export class ProjectionBaker {
   }
 
   /** Fill uv + alpha attributes for one photo pass. */
-  private preparePass(
-    slot: PhotoSlot,
-    photo: SlotPhoto,
-    mirrored: boolean,
-    image: HTMLImageElement,
-  ): void {
+  private preparePass(slot: PhotoSlot, photo: SlotPhoto, mirrored: boolean, aspect: number): void {
     const frame = SLOT_FRAMES[slot]
     const posAttr = this.headGeometry.getAttribute('position') as THREE.BufferAttribute
     const normalAttr = this.headGeometry.getAttribute('normal') as THREE.BufferAttribute
@@ -244,7 +279,6 @@ export class ProjectionBaker {
     const center = this.headBounds.getCenter(new THREE.Vector3())
     // The head's height maps to ~70% of the photo's height.
     const headSpan = Math.max(size.y, 1e-4)
-    const aspect = image.naturalWidth / Math.max(1, image.naturalHeight)
 
     const v = new THREE.Vector3()
     const n = new THREE.Vector3()
@@ -253,7 +287,7 @@ export class ProjectionBaker {
       n.fromBufferAttribute(normalAttr, i)
       let a = v.dot(frame.uAxis)
       let b = v.dot(frame.vAxis)
-      if (mirrored) a = -a
+      if (mirrored !== photo.flipH) a = -a
       if (photo.rotation) {
         const rad = (photo.rotation * Math.PI) / 180
         const ca = Math.cos(rad)
@@ -269,8 +303,9 @@ export class ProjectionBaker {
       // Visibility is about THIS pass's direction; mirroring only flips the
       // photo sampling (handled in `a` above), not the facing test.
       const weight = n.dot(frame.view)
-      // Ease in from grazing angles; fully opaque when facing the camera.
-      const alpha = THREE.MathUtils.smoothstep(weight, 0.05, 0.55)
+      // Ease in from grazing angles; the feather setting widens the ramp so
+      // the photo wraps softly (or cuts hard at 0).
+      const alpha = THREE.MathUtils.smoothstep(weight, 0.05, 0.1 + photo.feather)
       colorOut.setXYZW(i, 1, 1, 1, alpha)
     }
     uvOut.needsUpdate = true

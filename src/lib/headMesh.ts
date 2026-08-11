@@ -9,6 +9,8 @@ export interface FaceFitSettings {
   scale: number
   /** Vertical offset in head space (meters, + is up). */
   offsetY: number
+  /** Horizontal offset in head space (meters, + is the subject's left). */
+  offsetX?: number
 }
 
 /** How much of the head rotation is carried by the neck bone (rest by the head). */
@@ -289,7 +291,7 @@ async function loadAndPrepare(url: string): Promise<PreparedHead> {
       const [cx, cy] = canonicalVertex(i)
       const hx = fit.scale * cx + fit.tx
       const hy = fit.scale * cy + fit.ty
-      let x = centerX + (hx - centerX) * userFit.scale
+      let x = centerX + (hx - centerX) * userFit.scale + (userFit.offsetX ?? 0)
       let y = centerY + (hy - centerY) * userFit.scale + userFit.offsetY
       let hit = surfaceUV(x, y)
       let guard = 0

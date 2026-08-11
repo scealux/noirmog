@@ -42,6 +42,8 @@ export interface FaceFitEditSettings {
   scale: number
   /** Vertical offset in head space (meters, + is up). */
   offsetY: number
+  /** Horizontal offset in head space (meters). */
+  offsetX: number
   /** Feather distance of the edge blend, in UV units (0 = hard edge). */
   feather: number
 }
@@ -50,6 +52,7 @@ export interface FaceFitEditSettings {
 export const DEFAULT_FACE_FIT: FaceFitEditSettings = {
   scale: 1.1,
   offsetY: 0.012,
+  offsetX: 0,
   feather: 0.07,
 }
 

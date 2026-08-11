@@ -2,6 +2,7 @@ import { useFittingStore } from '../state/fittingStore'
 import { usePerformanceStore } from '../state/performanceStore'
 import { useTaskStore } from '../state/taskStore'
 import type { PhotoSlot, SlotPhotos } from './projectionBaker'
+import { DEFAULT_SLOT_PHOTO } from '../state/fittingStore'
 
 /**
  * Session persistence so a refresh doesn't wipe the setup:
@@ -76,7 +77,7 @@ interface PersistedSettings {
   keyPoints: unknown
   mirrorFill: boolean
   headModel: string
-  slotAdjust: Record<string, { scale: number; offsetX: number; offsetY: number; exposure: number; rotation: number }>
+  slotAdjust: Record<string, Record<string, number | boolean>>
   faceFit: unknown
   channelSettings: unknown
 }
@@ -91,13 +92,8 @@ function saveSettings(): void {
       const perf = usePerformanceStore.getState()
       const slotAdjust: PersistedSettings['slotAdjust'] = {}
       for (const [slot, photo] of Object.entries(fit.slotPhotos)) {
-        slotAdjust[slot] = {
-          scale: photo.scale,
-          offsetX: photo.offsetX,
-          offsetY: photo.offsetY,
-          exposure: photo.exposure,
-          rotation: photo.rotation,
-        }
+        const { url: _url, ...adjust } = photo
+        slotAdjust[slot] = adjust
       }
       const settings: PersistedSettings = {
         morph: fit.morph,
@@ -149,14 +145,10 @@ async function restore(): Promise<void> {
   for (const slot of slots) {
     const blob = await idbGet(`slot:${slot}`).catch(() => null)
     if (!blob) continue
-    const adjust = settings.slotAdjust?.[slot]
     restored[slot] = {
+      ...DEFAULT_SLOT_PHOTO,
+      ...(settings.slotAdjust?.[slot] ?? {}),
       url: URL.createObjectURL(blob),
-      scale: adjust?.scale ?? 1,
-      offsetX: adjust?.offsetX ?? 0,
-      offsetY: adjust?.offsetY ?? 0,
-      exposure: adjust?.exposure ?? 1,
-      rotation: adjust?.rotation ?? 0,
     }
   }
   if (Object.keys(restored).length > 0) {

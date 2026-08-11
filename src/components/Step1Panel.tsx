@@ -85,6 +85,7 @@ export function Step1Panel() {
   const setMirrorFill = useFittingStore((s) => s.setMirrorFill)
   const setSlotPhoto = useFittingStore((s) => s.setSlotPhoto)
   const adjustSlotPhoto = useFittingStore((s) => s.adjustSlotPhoto)
+  const toggleSlotPhoto = useFittingStore((s) => s.toggleSlotPhoto)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const slotInputRef = useRef<HTMLInputElement>(null)
   const pendingSlot = useRef<PhotoSlot>('left')
@@ -93,6 +94,8 @@ export function Step1Panel() {
   const dragIndex = useRef<number | null>(null)
   const [detecting, setDetecting] = useState(false)
   const [guided, setGuided] = useState(false)
+  const gizmoMode = useFittingStore((st) => st.gizmoMode)
+  const setGizmoMode = useFittingStore((st) => st.setGizmoMode)
   const activeSlot = useFittingStore((st) => st.activeSlot)
   const setActiveSlot = useFittingStore((st) => st.setActiveSlot)
 
@@ -426,6 +429,18 @@ export function Step1Panel() {
             </button>
           )}
         </div>
+        <div className="button-row" style={{ margin: '8px 0' }}>
+          <span className="slider-label">Gizmo</span>
+          {(['translate', 'rotate', 'scale'] as const).map((m) => (
+            <button
+              key={m}
+              className={gizmoMode === m ? 'slot-filled' : ''}
+              onClick={() => setGizmoMode(gizmoMode === m ? null : m)}
+            >
+              {m === 'translate' ? 'Move' : m === 'rotate' ? 'Rotate' : 'Scale'}
+            </button>
+          ))}
+        </div>
         {(activeSlot === 'left' || activeSlot === 'right') &&
           !(slotPhotos.left && slotPhotos.right) && (
             <label className="check-label" style={{ margin: '8px 0' }}>
@@ -439,12 +454,31 @@ export function Step1Panel() {
           )}
         {slotPhotos[activeSlot] && (
           <>
+            <div className="button-row" style={{ marginBottom: 6 }}>
+              <label className="check-label">
+                <input
+                  type="checkbox"
+                  checked={slotPhotos[activeSlot]!.flipH}
+                  onChange={(e) => toggleSlotPhoto(activeSlot, 'flipH', e.target.checked)}
+                />
+                Flip horizontal
+              </label>
+              <label className="check-label">
+                <input
+                  type="checkbox"
+                  checked={slotPhotos[activeSlot]!.removeBg}
+                  onChange={(e) => toggleSlotPhoto(activeSlot, 'removeBg', e.target.checked)}
+                />
+                Remove background
+              </label>
+            </div>
             {(
               [
                 ['Zoom', 'scale', 0.5, 2, 1],
                 ['Shift X', 'offsetX', -0.4, 0.4, 0],
                 ['Shift Y', 'offsetY', -0.4, 0.4, 0],
                 ['Rotation', 'rotation', -30, 30, 0],
+                ['Edge feather', 'feather', 0, 1, 0.45],
                 ['Exposure', 'exposure', 0.5, 2, 1],
               ] as const
             ).map(([label, key, min, max, def]) => (

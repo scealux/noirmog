@@ -5,6 +5,7 @@ import { HeadBust } from './HeadBust'
 import { DevDebugBridge } from './DevDebugBridge'
 import { useTaskStore } from '../state/taskStore'
 import { viewportHandle } from '../lib/viewportHandle'
+import { ProjectionGizmos } from './ProjectionGizmos'
 
 class ViewportErrorBoundary extends Component<
   { children: ReactNode },
@@ -50,6 +51,7 @@ export function Viewport() {
         <directionalLight position={[-2, 1.5, -1]} intensity={0.35} />
         <Suspense fallback={null}>
           <HeadBust />
+          <ProjectionGizmos />
         </Suspense>
         <Grid
           position={[0, -0.09, 0]}

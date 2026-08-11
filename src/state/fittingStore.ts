@@ -8,7 +8,16 @@ import type { PhotoSlot, SlotPhotos } from '../lib/projectionBaker'
 import { setActiveHeadModel, type HeadModelId } from '../lib/headMesh'
 import { persistPhoto, removePersistedPhoto } from '../lib/persistence'
 
-export const DEFAULT_SLOT_PHOTO = { scale: 1, offsetX: 0, offsetY: 0, exposure: 1, rotation: 0 }
+export const DEFAULT_SLOT_PHOTO = {
+  scale: 1,
+  offsetX: 0,
+  offsetY: 0,
+  exposure: 1,
+  rotation: 0,
+  feather: 0.45,
+  flipH: false,
+  removeBg: true,
+}
 
 /**
  * Landmarks used to measure facial proportions. These are the draggable points
@@ -61,7 +70,14 @@ interface FittingState {
   resetMorph: () => void
 
   setSlotPhoto: (slot: PhotoSlot, url: string | null) => void
-  adjustSlotPhoto: (slot: PhotoSlot, key: 'scale' | 'offsetX' | 'offsetY' | 'exposure' | 'rotation', value: number) => void
+  adjustSlotPhoto: (
+    slot: PhotoSlot,
+    key: 'scale' | 'offsetX' | 'offsetY' | 'exposure' | 'rotation' | 'feather',
+    value: number,
+  ) => void
+  toggleSlotPhoto: (slot: PhotoSlot, key: 'flipH' | 'removeBg', value: boolean) => void
+  gizmoMode: 'translate' | 'rotate' | 'scale' | null
+  setGizmoMode: (m: 'translate' | 'rotate' | 'scale' | null) => void
   setMirrorFill: (v: boolean) => void
 }
 
@@ -118,6 +134,18 @@ export const useFittingStore = create<FittingState>((set) => ({
       }
     }),
   setMirrorFill: (v) => set((s) => ({ mirrorFill: v, bakeVersion: s.bakeVersion + 1 })),
+
+  toggleSlotPhoto: (slot, key, value) =>
+    set((s) => {
+      const photo = s.slotPhotos[slot]
+      if (!photo) return s
+      return {
+        slotPhotos: { ...s.slotPhotos, [slot]: { ...photo, [key]: value } },
+        bakeVersion: s.bakeVersion + 1,
+      }
+    }),
+  gizmoMode: null,
+  setGizmoMode: (m) => set({ gizmoMode: m }),
 }))
 
 if (import.meta.env.DEV) {

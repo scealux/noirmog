@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local reference assets & test clips (not published)
+Noirmog Head UV Ref/

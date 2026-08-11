@@ -31,9 +31,10 @@ export function resetFaceLandmarker(): void {
 }
 
 async function create(): Promise<FaceLandmarker> {
+  const base = import.meta.env.BASE_URL
   let fileset
   try {
-    fileset = await FilesetResolver.forVisionTasks('/mediapipe/wasm')
+    fileset = await FilesetResolver.forVisionTasks(`${base}mediapipe/wasm`)
   } catch (err) {
     throw new PipelineError(
       `Could not load MediaPipe wasm: ${err instanceof Error ? err.message : err}`,
@@ -42,7 +43,7 @@ async function create(): Promise<FaceLandmarker> {
   }
   try {
     return await FaceLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: '/mediapipe/face_landmarker.task', delegate: 'GPU' },
+      baseOptions: { modelAssetPath: `${base}mediapipe/face_landmarker.task`, delegate: 'GPU' },
       runningMode: 'VIDEO',
       numFaces: 1,
       outputFaceBlendshapes: true,

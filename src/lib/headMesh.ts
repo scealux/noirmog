@@ -165,7 +165,7 @@ function buildJawMorph(geometry: THREE.BufferGeometry, fit: SimilarityFit): void
 
 let cached: Promise<PreparedHead> | null = null
 
-export function prepareHead(url = '/models/head.glb'): Promise<PreparedHead> {
+export function prepareHead(url = `${import.meta.env.BASE_URL}models/head.glb`): Promise<PreparedHead> {
   cached ??= loadAndPrepare(url).catch((err) => {
     cached = null
     throw err

@@ -3,16 +3,25 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { canonicalPositions, canonicalVertex, CANONICAL_VERTEX_COUNT } from './canonicalFace'
 import { PipelineError } from './runTask'
 
+/** User-adjustable placement of the face texture on the head. */
+export interface FaceFitSettings {
+  /** Scale of the landmark layout around the face center (1 = auto fit). */
+  scale: number
+  /** Vertical offset in head space (meters, + is up). */
+  offsetY: number
+}
+
 /**
  * The head mesh prepared for the pipeline:
  * - geometry with a procedural "jawOpen" morph target (index 0)
- * - landmarkUV: for each of the 468 landmarks, its fixed destination in the
- *   head's UV square. Warping video frames to these fixed destinations is what
- *   stabilizes the texture AND lays it out in UV space in one step.
+ * - mapToUV: computes, for each of the 468 landmarks, its fixed destination in
+ *   the head's UV square under the given fit settings. Warping video frames to
+ *   these fixed destinations is what stabilizes the texture AND lays it out in
+ *   UV space in one step.
  */
 export interface PreparedHead {
   geometry: THREE.BufferGeometry
-  landmarkUV: Float32Array // 468 * 2, in UV space (0..1, v up)
+  mapToUV: (fit: FaceFitSettings) => Float32Array // 468 * 2, in UV space
   /** Neck pivot in mesh space; rotate the head group around this point. */
   pivot: THREE.Vector3
   bounds: THREE.Box3
@@ -85,7 +94,9 @@ function fitCanonicalToHead(headPos: ArrayLike<number>, headCount: number): Simi
  * any unwrap (the authored layout spreads the face to fill the square, so a
  * global affine fit is NOT a valid approximation).
  */
-function makeSurfaceUVLookup(geometry: THREE.BufferGeometry): (x: number, y: number) => [number, number] {
+function makeSurfaceUVLookup(
+  geometry: THREE.BufferGeometry,
+): (x: number, y: number) => [number, number] | null {
   const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }))
   const bounds = new THREE.Box3().setFromBufferAttribute(
     geometry.getAttribute('position') as THREE.BufferAttribute,
@@ -98,13 +109,7 @@ function makeSurfaceUVLookup(geometry: THREE.BufferGeometry): (x: number, y: num
     origin.set(x, y, bounds.max.z + 1)
     raycaster.set(origin, dir)
     const hit = raycaster.intersectObject(mesh, false)[0]
-    if (!hit?.uv) {
-      throw new PipelineError(
-        `Face landmark at (${x.toFixed(3)}, ${y.toFixed(3)}) does not project onto the head mesh`,
-        'The head mesh may be too narrow for the canonical face; check the base mesh.',
-      )
-    }
-    return [hit.uv.x, hit.uv.y]
+    return hit?.uv ? [hit.uv.x, hit.uv.y] : null
   }
 }
 
@@ -138,13 +143,22 @@ function buildJawMorph(geometry: THREE.BufferGeometry, fit: SimilarityFit): void
   const zMid = (bounds.min.z + bounds.max.z) / 2
   const hingeZ = zMid
 
+  const lipChinSpan = Math.max(1e-4, mouthY - chinY)
+  // Fade the morph OUT below the chin so the neck and chest stay put.
+  const chinBottomY = chinY - lipChinSpan * 0.25
+  const neckY = chinY - lipChinSpan * 0.8
+  const frontZ = bounds.max.z * 0.3
+
   const maxAngle = THREE.MathUtils.degToRad(14)
   const v = new THREE.Vector3()
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos as THREE.BufferAttribute, i)
-    if (v.z < zMid * 0.15) continue // back of head / neck stays put
-    // 1 at chin, 0 at lip line and above.
-    const t = THREE.MathUtils.smoothstep(mouthY - v.y, 0, Math.max(1e-4, mouthY - chinY) * 0.9)
+    if (v.z < frontZ) continue // back of head / neck column stays put
+    // 1 at chin, 0 at lip line and above…
+    const tDown = THREE.MathUtils.smoothstep(mouthY - v.y, 0, lipChinSpan * 0.9)
+    // …and back to 0 below the chin (this is what keeps the neck/chest still).
+    const tCut = THREE.MathUtils.smoothstep(v.y - neckY, 0, chinBottomY - neckY)
+    const t = tDown * tCut
     if (t <= 0) continue
     const angle = maxAngle * t
     const dy = v.y - hingeY
@@ -186,15 +200,39 @@ async function loadAndPrepare(url: string): Promise<PreparedHead> {
   const pos = geometry.getAttribute('position')
   const fit = fitCanonicalToHead(pos.array as ArrayLike<number>, pos.count)
   const surfaceUV = makeSurfaceUVLookup(geometry)
+  const headAnchors = findFaceAnchors(pos.array as ArrayLike<number>, pos.count)
+  const centerX = headAnchors.nose[0]
+  const centerY = headAnchors.nose[1]
 
-  // Fixed UV destination for every landmark: canonical -> head space -> raycast
-  // onto the head surface -> authored UV at the hit point.
-  const landmarkUV = new Float32Array(CANONICAL_VERTEX_COUNT * 2)
-  for (let i = 0; i < CANONICAL_VERTEX_COUNT; i++) {
-    const [cx, cy] = canonicalVertex(i)
-    const [u, v] = surfaceUV(fit.scale * cx + fit.tx, fit.scale * cy + fit.ty)
-    landmarkUV[i * 2] = u
-    landmarkUV[i * 2 + 1] = v
+  // Fixed UV destination for every landmark: canonical -> head space (with the
+  // user's fit scale/offset applied around the nose) -> raycast onto the head
+  // surface -> authored UV at the hit point. Landmarks scaled past the head's
+  // silhouette are pulled back toward the face center until they hit.
+  const mapToUV = (userFit: FaceFitSettings): Float32Array => {
+    const landmarkUV = new Float32Array(CANONICAL_VERTEX_COUNT * 2)
+    for (let i = 0; i < CANONICAL_VERTEX_COUNT; i++) {
+      const [cx, cy] = canonicalVertex(i)
+      const hx = fit.scale * cx + fit.tx
+      const hy = fit.scale * cy + fit.ty
+      let x = centerX + (hx - centerX) * userFit.scale
+      let y = centerY + (hy - centerY) * userFit.scale + userFit.offsetY
+      let hit = surfaceUV(x, y)
+      let guard = 0
+      while (!hit && guard++ < 8) {
+        x = centerX + (x - centerX) * 0.92
+        y = centerY + (y - centerY) * 0.92
+        hit = surfaceUV(x, y)
+      }
+      if (!hit) {
+        throw new PipelineError(
+          `Face landmark ${i} does not project onto the head mesh`,
+          'Reduce the face size, or check the base mesh.',
+        )
+      }
+      landmarkUV[i * 2] = hit[0]
+      landmarkUV[i * 2 + 1] = hit[1]
+    }
+    return landmarkUV
   }
 
   buildJawMorph(geometry, fit)
@@ -202,5 +240,5 @@ async function loadAndPrepare(url: string): Promise<PreparedHead> {
   const bounds = new THREE.Box3().setFromBufferAttribute(pos as THREE.BufferAttribute)
   const pivot = new THREE.Vector3(0, bounds.min.y + (bounds.max.y - bounds.min.y) * 0.25, 0)
 
-  return { geometry, landmarkUV, pivot, bounds }
+  return { geometry, mapToUV, pivot, bounds }
 }

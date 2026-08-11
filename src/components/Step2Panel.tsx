@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import {
   DEFAULT_CHANNEL_SETTINGS,
+  DEFAULT_FACE_FIT,
   getPerformanceVideo,
   usePerformanceStore,
 } from '../state/performanceStore'
@@ -42,6 +43,7 @@ export function Step2Panel() {
     trimEnd,
     loop,
     channelSettings,
+    faceFit,
     loadVideo,
     setTracking,
     setIsTracking,
@@ -49,6 +51,7 @@ export function Step2Panel() {
     setTrim,
     setLoop,
     setChannelSetting,
+    setFaceFit,
   } = usePerformanceStore()
   const log = useTaskStore((s) => s.log)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -72,15 +75,25 @@ export function Step2Panel() {
     }
     const onPlay = () => setPlaying(true)
     const onPause = () => setPlaying(false)
+    // 'ended' can fire before timeupdate crosses the trim threshold, so loop here too.
+    const onEnded = () => {
+      const { loop: doLoop, trimStart: start } = usePerformanceStore.getState()
+      if (doLoop) {
+        video.currentTime = start
+        void video.play().catch(() => setPlaying(false))
+      } else {
+        setPlaying(false)
+      }
+    }
     video.addEventListener('timeupdate', onTime)
     video.addEventListener('play', onPlay)
     video.addEventListener('pause', onPause)
-    video.addEventListener('ended', onPause)
+    video.addEventListener('ended', onEnded)
     return () => {
       video.removeEventListener('timeupdate', onTime)
       video.removeEventListener('play', onPlay)
       video.removeEventListener('pause', onPause)
-      video.removeEventListener('ended', onPause)
+      video.removeEventListener('ended', onEnded)
     }
   }, [setPlaying])
 
@@ -95,6 +108,19 @@ export function Step2Panel() {
     }, 250)
     return () => clearInterval(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recState])
+
+  // Attach the camera stream to the preview element after it has committed —
+  // attaching in the same tick as the state change raced the mount and could
+  // leave a black preview on first authorization.
+  useEffect(() => {
+    if (recState === 'idle') return
+    const el = previewRef.current
+    const session = sessionRef.current
+    if (el && session && el.srcObject !== session.stream) {
+      el.srcObject = session.stream
+      void el.play().catch(() => {})
+    }
   }, [recState])
 
   // Release the camera if the panel unmounts mid-session.
@@ -128,13 +154,6 @@ export function Step2Panel() {
       sessionRef.current = session
       setRecState('preview')
       log('info', 'Capture', 'Webcam opened')
-      // The preview element mounts with the state change; attach on next tick.
-      requestAnimationFrame(() => {
-        if (previewRef.current) {
-          previewRef.current.srcObject = session.stream
-          void previewRef.current.play().catch(() => {})
-        }
-      })
     } catch (err) {
       log('error', 'Capture', errorText(err))
     }
@@ -351,6 +370,48 @@ export function Step2Panel() {
               <button onClick={() => setTrim(0, videoDuration)}>Reset</button>
             </div>
             <p>Range: {formatDuration(Math.max(0, trimEnd - trimStart))}</p>
+          </div>
+
+          <div className="panel-section">
+            <h3>Face Fit & Blend</h3>
+            {sliderRow(
+              'Face size',
+              faceFit.scale,
+              0.85,
+              1.35,
+              0.01,
+              `${Math.round(faceFit.scale * 100)}%`,
+              (v) => setFaceFit('scale', v),
+            )}
+            {sliderRow(
+              'Height',
+              faceFit.offsetY,
+              -0.04,
+              0.04,
+              0.001,
+              `${(faceFit.offsetY * 100).toFixed(1)}cm`,
+              (v) => setFaceFit('offsetY', v),
+            )}
+            {sliderRow(
+              'Feather',
+              faceFit.feather,
+              0,
+              0.18,
+              0.005,
+              faceFit.feather === 0 ? 'hard' : faceFit.feather.toFixed(3),
+              (v) => setFaceFit('feather', v),
+            )}
+            <div className="button-row">
+              <button
+                onClick={() => {
+                  for (const [k, v] of Object.entries(DEFAULT_FACE_FIT)) {
+                    setFaceFit(k as keyof typeof DEFAULT_FACE_FIT, v)
+                  }
+                }}
+              >
+                Reset
+              </button>
+            </div>
           </div>
 
           <div className="panel-section">

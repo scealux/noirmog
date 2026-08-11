@@ -36,6 +36,23 @@ export const DEFAULT_CHANNEL_SETTINGS: ChannelEditSettings = {
   smoothing: 1,
 }
 
+/** Placement + blending of the face texture on the head. */
+export interface FaceFitEditSettings {
+  /** Scale of the face layout on the head (1 = auto fit). */
+  scale: number
+  /** Vertical offset in head space (meters, + is up). */
+  offsetY: number
+  /** Feather distance of the edge blend, in UV units (0 = hard edge). */
+  feather: number
+}
+
+// Defaults nudged from testing: the auto fit reads slightly small and low.
+export const DEFAULT_FACE_FIT: FaceFitEditSettings = {
+  scale: 1.1,
+  offsetY: 0.012,
+  feather: 0.07,
+}
+
 interface PerformanceState {
   /** Object URL (or dev URL) of the loaded performance video. */
   videoUrl: string | null
@@ -51,6 +68,7 @@ interface PerformanceState {
   loop: boolean
 
   channelSettings: ChannelEditSettings
+  faceFit: FaceFitEditSettings
 
   loadVideo: (url: string, name: string) => Promise<void>
   setTracking: (data: TrackingData | null) => void
@@ -61,6 +79,10 @@ interface PerformanceState {
   setChannelSetting: <K extends keyof ChannelEditSettings>(
     key: K,
     value: ChannelEditSettings[K],
+  ) => void
+  setFaceFit: <K extends keyof FaceFitEditSettings>(
+    key: K,
+    value: FaceFitEditSettings[K],
   ) => void
 }
 
@@ -96,6 +118,7 @@ export const usePerformanceStore = create<PerformanceState>((set, get) => ({
   loop: true,
 
   channelSettings: { ...DEFAULT_CHANNEL_SETTINGS },
+  faceFit: { ...DEFAULT_FACE_FIT },
 
   loadVideo: async (url, name) => {
     const video = getPerformanceVideo()
@@ -145,4 +168,6 @@ export const usePerformanceStore = create<PerformanceState>((set, get) => ({
 
   setChannelSetting: (key, value) =>
     set((state) => ({ channelSettings: { ...state.channelSettings, [key]: value } })),
+
+  setFaceFit: (key, value) => set((state) => ({ faceFit: { ...state.faceFit, [key]: value } })),
 }))

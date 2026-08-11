@@ -108,6 +108,15 @@ for the full spec.
   prove sluggish in practice.
 - 2026-08-10: Channel edit settings apply at sample time (never baked into tracking data),
   so re-tweaking never requires re-tracking; smoothing is a simple centered moving average.
+- 2026-08-10: From user testing — feathered edge blending pulled forward from Phase 4 into
+  the warper: per-vertex alpha ramped over UV distance from the face's OUTER boundary ring
+  (interior eye/lip boundary loops excluded topologically, or they'd go transparent).
+- 2026-08-10: Face fit is user-adjustable (size / height / feather in Step 2); auto-fit
+  defaults nudged to 110% + 1.2cm up per testing. Landmarks scaled past the head silhouette
+  are pulled back toward the face center until the raycast hits (graceful edge compression
+  instead of a hard error).
+- 2026-08-10: Jaw morph now fades out below the chin (was dragging the whole neck/chest).
+- 2026-08-10: Trim's permanent home is Step 2; Step 3 = blend color + export only (user call).
 
 ## Assets & Sources
 - Base head mesh: user-authored low-poly head ("Noirmog Head UV Ref/", CC: project-own).

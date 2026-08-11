@@ -18,12 +18,8 @@ const PLACEHOLDERS: Record<number, { sections: { title: string; body: string }[]
   3: {
     sections: [
       {
-        title: 'Trim',
-        body: 'Cut the performance to the range you want. (Phase 4)',
-      },
-      {
         title: 'Blend',
-        body: 'Auto-sampled skin color, picker override, feathered blend zone into the head. (Phase 4)',
+        body: 'Skin color picker override for the auto-sampled tone. Trim and edge feathering live in Step 2. (Phase 4)',
       },
       {
         title: 'Export',

@@ -16,6 +16,7 @@ const NEUTRAL_SKIN = new THREE.Color('#9a8578')
 export function HeadBust() {
   const head = use(prepareHead())
   const tracking = usePerformanceStore((s) => s.tracking)
+  const faceFit = usePerformanceStore((s) => s.faceFit)
   const gl = useThree((s) => s.gl)
 
   const groupRef = useRef<THREE.Group>(null)
@@ -32,10 +33,29 @@ export function HeadBust() {
     [],
   )
 
+  const landmarkUV = useMemo(
+    () => head.mapToUV({ scale: faceFit.scale, offsetY: faceFit.offsetY }),
+    [head, faceFit.scale, faceFit.offsetY],
+  )
+
   const warper = useMemo(() => {
     if (!tracking) return null
-    return new FaceTextureWarper(head.landmarkUV, getPerformanceVideo(), tracking.skinColor)
+    const state = usePerformanceStore.getState()
+    return new FaceTextureWarper(
+      head.mapToUV({ scale: state.faceFit.scale, offsetY: state.faceFit.offsetY }),
+      getPerformanceVideo(),
+      tracking.skinColor,
+      state.faceFit.feather,
+    )
   }, [tracking, head])
+
+  // Live-apply face-fit edits without rebuilding the warper.
+  useEffect(() => {
+    warper?.setLandmarkUV(landmarkUV)
+  }, [warper, landmarkUV])
+  useEffect(() => {
+    warper?.setFeather(faceFit.feather)
+  }, [warper, faceFit.feather])
 
   const sampler = useMemo(() => (tracking ? new ChannelSampler(tracking) : null), [tracking])
 
